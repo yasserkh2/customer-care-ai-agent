@@ -11,11 +11,15 @@ Thumbs.db
 
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+*.egg-info/
+.eggs/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 .venv/
 venv/
 
@@ -30,6 +34,7 @@ build/
 dist/
 coverage/
 .cache/
+graph.png
 
 # Env/local config
 .env
@@ -37,6 +42,16 @@ coverage/
 
 # Local docs
 Customer Care AI Chatbot Agent Development Task-v2 (1) (1).docx
+Customer Care AI Chatbot Agent Development Task-v2 (1) (1).md
+DEVELOPMENT_DECISIONS.md
+INTERFACE_DECISIONS.md
+RAG_IMPLEMENTATION_PLAN.md
+OOP_SOLID_PRINCIPLES.md
 
 # Local tooling
 .codex
+
+# Local vector database
+vector_db/qdrant/data/
+vector_db/qdrant/data/local/
+vector_db/qdrant/data/docker/

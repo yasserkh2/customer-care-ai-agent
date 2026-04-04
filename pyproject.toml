@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "customer-care-ai-agent"
+version = "0.1.0"
+description = "Starter LangGraph structure for a customer care AI chatbot."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "langchain>=0.3.0",
+    "langgraph>=0.2.0",
+    "qdrant-client>=1.9.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*", "vector_db*", "processing*"]
