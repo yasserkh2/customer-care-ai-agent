@@ -9,10 +9,11 @@ The project is set up as a runnable foundation for a customer support chatbot. I
 - Query ingestion
 - Intent classification
 - Graph-based routing
-- Knowledge-base answer path with placeholder service output
+- Knowledge-base answer path with retrieval plus grounded RAG answering
 - Appointment request response path
 - Human escalation response path
 - Shared chat state and conversation history handling
+- Session memory in the CLI chat loop
 - Standalone processing layer for ingestion, chunking, and vectorization
 - Standalone vector DB layer with Qdrant setup scaffolding
 - CLI runner
@@ -38,6 +39,7 @@ The project separates responsibilities clearly:
 - `app/graph/` contains workflow orchestration
 - `app/graph/nodes/` contains thin graph node adapters
 - `app/services/` contains business logic and reusable application services
+- `app/llm/` contains prompt building and model-provider generation logic
 - `processing/` contains ingestion, chunking, and vectorization workflows
 - `vector_db/` contains vector-database abstractions and vendor-specific infrastructure
 - `app/graph/dependencies.py` is the composition root
@@ -62,11 +64,22 @@ app/
       action_request.py
       human_escalation.py
       response.py
+  llm/
+    __init__.py
+    contracts.py
+    factory.py
+    http.py
+    prompts.py
+    providers/
+      __init__.py
+      gemini.py
+      openai.py
   services/
     __init__.py
     contracts.py
     history.py
     intent.py
+    knowledge_base.py
     models.py
     responses.py
     router.py
@@ -176,7 +189,7 @@ The router sends the conversation to:
 
 ### Response generation
 
-The knowledge-base path is still a placeholder service and does not yet perform true retrieval or generation from the mock KB.
+The knowledge-base path now retrieves FAQ context from Qdrant and uses a grounded generation prompt to produce the final answer. If generation is not configured or fails, it falls back to the best extractive FAQ answer.
 
 The action request path currently returns a guided follow-up asking for service, date, and time.
 
@@ -193,7 +206,7 @@ Current status:
 - Qdrant setup implementation lives in `vector_db/qdrant/setup.py`
 - setup script lives in `scripts/setup_qdrant.py`
 
-This means the project is now prepared for a real retrieval implementation without mixing vector infrastructure into the app service layer.
+This vector layer now supports the retrieval-backed `kb_answer` path without mixing vector infrastructure into the app service layer.
 
 ### Processing layer
 
@@ -221,6 +234,20 @@ Current providers:
 
 The vectorization pipeline embeds stored FAQ chunks as documents, while retrieval embeds incoming user questions as queries. This matters for providers such as Gemini that support retrieval-specific task types.
 
+### Current FAQ dataset
+
+For current KB testing, the repo now includes a curated higher-quality FAQ set:
+
+- `cob_mock_kb_large/high_quality_faqs/high_quality_faqs.jsonl`
+
+This set is intended to be a better retrieval baseline than the older large mixed synthetic FAQ source because it is:
+
+- smaller and easier to inspect
+- less repetitive
+- more service-specific
+- written more like direct customer questions
+- better suited for early RAG quality checks
+
 ## Setup
 
 Use the local virtual environment:
@@ -238,6 +265,9 @@ EMBEDDING_PROVIDER=gemini
 GEMINI_API_KEY=your_gemini_api_key_here
 # Latest stable Gemini embedding model
 GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+GEMINI_CHAT_MODEL=gemini-2.5-flash
+KB_ANSWER_PROVIDER=gemini
+GEMINI_MIN_REQUEST_INTERVAL_SECONDS=1.0
 QDRANT_EMBEDDING_DIMENSION=1536
 ```
 
@@ -284,12 +314,26 @@ Run the CLI chatbot:
 .venv/bin/python scripts/run_cli_chat.py
 ```
 
+The CLI keeps chat history in memory for the current session, so follow-up questions can use prior turns as context.
+
 ## FAQ Pipeline Commands
 
 Run the full FAQ processing pipeline with your `.env` settings:
 
 ```bash
 .venv/bin/python scripts/run_faq_processing_pipeline.py
+```
+
+Run the pipeline against the smaller high-quality FAQ test set:
+
+```bash
+FAQS_JSONL_PATH=cob_mock_kb_large/high_quality_faqs/high_quality_faqs.jsonl QDRANT_PATH=vector_db/qdrant/data/high_quality_faqs .venv/bin/python scripts/run_faq_processing_pipeline.py
+```
+
+If you want more visible progress during ingestion, lower the batch size:
+
+```bash
+FAQ_PIPELINE_BATCH_SIZE=3 .venv/bin/python scripts/run_faq_processing_pipeline.py
 ```
 
 Run a small Gemini experiment with only 20 FAQ records:
@@ -337,6 +381,7 @@ Export the graph PNG:
 Key environment variables:
 
 - `EMBEDDING_PROVIDER`
+- `KB_ANSWER_PROVIDER`
 - `FAQS_JSONL_PATH`
 - `FAQ_PIPELINE_LIMIT`
 - `FAQ_PIPELINE_BATCH_SIZE`
@@ -345,14 +390,22 @@ Key environment variables:
 - `QDRANT_EMBEDDING_DIMENSION`
 - `GEMINI_API_KEY`
 - `GEMINI_EMBEDDING_MODEL`
+- `GEMINI_CHAT_MODEL`
+- `GEMINI_MIN_REQUEST_INTERVAL_SECONDS`
 - `OPENAI_API_KEY`
 - `OPENAI_EMBEDDING_MODEL`
+- `OPENAI_CHAT_MODEL`
+
+Important:
+- retrieval quality depends on using the same embedding provider for both ingestion and query time
+- if you ingest with `EMBEDDING_PROVIDER=local`, you should also chat/query with `EMBEDDING_PROVIDER=local`
+- if you ingest with `EMBEDDING_PROVIDER=gemini`, you should also chat/query with `EMBEDDING_PROVIDER=gemini`
 
 ## Example interaction
 
 ```text
-You: I need to book an appointment
-Bot: I can help with an appointment request. Please share the service you need, plus your preferred date and time.
+You: What does credentialing include?
+Bot: Credentialing includes gathering provider information, preparing payer enrollment paperwork, tracking submissions, following up with payers, and maintaining provider records when demographic or licensing details change.
 ```
 
 ## Documentation
@@ -370,8 +423,8 @@ Bot: I can help with an appointment request. Please share the service you need, 
 
 ## Next development steps
 
-- Replace the placeholder KB service with real retrieval over the mock KB
-- Add provider-specific retry and error handling for embedding failures
+- Improve retrieval filtering and reranking for weak matches
+- Add provider-specific retry and error handling for embedding and generation failures
 - Add retrieval-quality checks for Gemini/OpenAI experiment sets
 - Expand ingestion beyond FAQs into documents and structured data
 - Add entity extraction for appointment requests

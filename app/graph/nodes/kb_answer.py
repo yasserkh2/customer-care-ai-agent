@@ -1,6 +1,6 @@
 from app.graph.state import ChatState
 from app.services.contracts import KnowledgeBaseService
-from app.services.responses import PlaceholderKnowledgeBaseService
+from app.services.knowledge_base import RetrievalKnowledgeBaseService
 
 
 class KnowledgeBaseAnswerNode:
@@ -12,7 +12,7 @@ class KnowledgeBaseAnswerNode:
         return answer.as_state_update()
 
 
-_default_node = KnowledgeBaseAnswerNode(PlaceholderKnowledgeBaseService())
+_default_node = KnowledgeBaseAnswerNode(RetrievalKnowledgeBaseService())
 
 
 def kb_answer(state: ChatState) -> ChatState:

@@ -58,3 +58,6 @@ VECTOR_SEARCH_DECISION.md
 vector_db/qdrant/data/
 vector_db/qdrant/data/local/
 vector_db/qdrant/data/docker/
+
+# Large local datasets
+cob_mock_kb_large/very_large_mixed_kb/

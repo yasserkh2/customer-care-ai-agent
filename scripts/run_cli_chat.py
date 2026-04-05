@@ -1,9 +1,19 @@
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from app.config import load_env_file
 from app.graph import build_graph
 from app.graph.state import create_initial_state
 
 
 def main() -> None:
+    load_env_file(PROJECT_ROOT / ".env")
     graph = build_graph()
+    state = create_initial_state("")
     print("Customer Care AI Agent starter CLI")
     print("Type 'exit' to quit.")
 
@@ -13,8 +23,15 @@ def main() -> None:
             print("Bye.")
             break
 
-        result = graph.invoke(create_initial_state(user_query))
-        print(f"Bot: {result.get('final_response', '')}")
+        state = graph.invoke(
+            {
+                **state,
+                "user_query": user_query,
+                "final_response": "",
+                "retrieved_context": [],
+            }
+        )
+        print(f"Bot: {state.get('final_response', '')}")
 
 
 if __name__ == "__main__":

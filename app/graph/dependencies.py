@@ -12,10 +12,10 @@ from app.services.contracts import (
 )
 from app.services.history import DefaultConversationHistoryManager
 from app.services.intent import KeywordIntentClassifier
+from app.services.knowledge_base import RetrievalKnowledgeBaseService
 from app.services.responses import (
     AppointmentRequestService,
     HumanEscalationService,
-    PlaceholderKnowledgeBaseService,
 )
 from app.services.router import DefaultIntentRouter
 
@@ -35,7 +35,7 @@ class GraphDependencies:
         return cls(
             history_manager=history_manager,
             intent_classifier=KeywordIntentClassifier(),
-            knowledge_base_service=PlaceholderKnowledgeBaseService(),
+            knowledge_base_service=RetrievalKnowledgeBaseService(),
             action_request_service=AppointmentRequestService(),
             escalation_service=HumanEscalationService(),
             intent_router=DefaultIntentRouter(),

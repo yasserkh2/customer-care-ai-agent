@@ -5,6 +5,7 @@ import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+import math
 from typing import TypeVar
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -65,6 +66,28 @@ def _batched(items: Sequence[T], batch_size: int) -> list[Sequence[T]]:
     ]
 
 
+def _print_progress(
+    completed_batches: int,
+    total_batches: int,
+    processed_records: int,
+    total_records: int,
+) -> None:
+    bar_width = 30
+    progress_ratio = (
+        completed_batches / total_batches if total_batches else 1.0
+    )
+    filled_width = math.floor(progress_ratio * bar_width)
+    bar = "#" * filled_width + "-" * (bar_width - filled_width)
+    percent = progress_ratio * 100
+    print(
+        f"[{bar}] {percent:5.1f}% "
+        f"({completed_batches}/{total_batches} batches, "
+        f"{processed_records}/{total_records} records)"
+        ,
+        flush=True,
+    )
+
+
 def main() -> None:
     load_env_file(PROJECT_ROOT / ".env")
 
@@ -89,12 +112,29 @@ def main() -> None:
     if limit is not None:
         processed_records = processed_records[:limit]
 
+    record_batches = _batched(processed_records, batch_size)
+    total_batches = len(record_batches)
     total_chunks = 0
     total_vector_records = 0
     total_upserted = 0
     sample_record = None
 
-    for record_batch in _batched(processed_records, batch_size):
+    if total_batches:
+        print(
+            f"Starting FAQ processing for {len(processed_records)} records "
+            f"across {total_batches} batch(es)...",
+            flush=True,
+        )
+
+    processed_record_count = 0
+    for batch_index, record_batch in enumerate(record_batches, start=1):
+        batch_start_record = processed_record_count + 1
+        batch_end_record = processed_record_count + len(record_batch)
+        print(
+            f"Starting batch {batch_index}/{total_batches} "
+            f"(records {batch_start_record}-{batch_end_record})...",
+            flush=True,
+        )
         chunks = []
         for record in record_batch:
             chunks.extend(chunking_strategy.chunk(record.as_chunking_input()))
@@ -105,9 +145,17 @@ def main() -> None:
         total_chunks += len(chunks)
         total_vector_records += vectorization_result.records_processed
         total_upserted += upsert_result.points_upserted
+        processed_record_count += len(record_batch)
 
         if sample_record is None and vectorization_result.vector_records:
             sample_record = vectorization_result.vector_records[0]
+
+        _print_progress(
+            completed_batches=batch_index,
+            total_batches=total_batches,
+            processed_records=processed_record_count,
+            total_records=len(processed_records),
+        )
 
     print("FAQ processing pipeline complete.")
     print(f"Source file: {source.file_path}")
