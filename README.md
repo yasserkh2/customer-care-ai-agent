@@ -13,7 +13,7 @@ The project is set up as a runnable foundation for a customer support chatbot. I
 - Appointment request response path
 - Human escalation response path
 - Shared chat state and conversation history handling
-- Standalone processing layer for ingestion contracts and models
+- Standalone processing layer for ingestion, chunking, and vectorization
 - Standalone vector DB layer with Qdrant setup scaffolding
 - CLI runner
 - Graph PNG export
@@ -38,7 +38,7 @@ The project separates responsibilities clearly:
 - `app/graph/` contains workflow orchestration
 - `app/graph/nodes/` contains thin graph node adapters
 - `app/services/` contains business logic and reusable application services
-- `processing/` contains ingestion contracts and ingestion-specific models
+- `processing/` contains ingestion, chunking, and vectorization workflows
 - `vector_db/` contains vector-database abstractions and vendor-specific infrastructure
 - `app/graph/dependencies.py` is the composition root
 
@@ -72,8 +72,21 @@ app/
     router.py
 processing/
   __init__.py
-  contracts.py
-  models.py
+  ingestion_pipeline/
+    __init__.py
+    contracts.py
+    faqs.py
+    models.py
+  chunking/
+    __init__.py
+    contracts.py
+    faqs.py
+    models.py
+  vectorization/
+    __init__.py
+    contracts.py
+    faqs.py
+    models.py
 vector_db/
   __init__.py
   contracts.py
@@ -124,14 +137,14 @@ This keeps the architecture more OOP-oriented and makes future replacement easie
 
 ### Processing code is separate from vector storage
 
-Ingestion and transformation code does not live inside `vector_db/`.
+Ingestion, chunking, and vectorization code does not live inside `vector_db/`.
 
 Instead:
 
-- `processing/` owns ingestion contracts and ingestion-layer models
+- `processing/` owns ingestion, chunking, and vectorization workflows
 - `vector_db/` owns vector persistence contracts and vector-layer models
 
-This keeps parsing and normalization independent from the chosen vector backend.
+This keeps parsing, chunking, and embedding preparation independent from the chosen vector backend.
 
 ### Dependencies are injected
 
@@ -178,15 +191,17 @@ This means the project is now prepared for a real retrieval implementation witho
 
 ### Processing layer
 
-The repository now also includes a standalone processing layer for ingestion-oriented code.
+The repository now also includes a standalone processing layer for retrieval preparation code.
 
 Current status:
 
-- ingestion contract lives in `processing/contracts.py`
-- ingestion models live in `processing/models.py`
-- the ingestion contract uses `ABC` because pipelines are expected to become explicit reusable workflows
+- ingestion pipeline contract lives in `processing/ingestion_pipeline/contracts.py`
+- chunking contract lives in `processing/chunking/contracts.py`
+- vectorization contract lives in `processing/vectorization/contracts.py`
+- FAQ-specific implementations now exist for ingestion, chunking, and vectorization
+- processing contracts use `ABC` because these layers are expected to become explicit reusable workflows
 
-This means FAQ, document, and structured-data ingestion can be built without coupling parsing logic to Qdrant or any future vector backend.
+This means FAQ, document, and structured-data workflows can be built without coupling parsing, chunking, or vector preparation logic to Qdrant or any future vector backend.
 
 ## Setup
 
@@ -269,8 +284,9 @@ Bot: I can help with an appointment request. Please share the service you need, 
 
 ## Next development steps
 
-- Build the first FAQ ingestion pipeline under `processing/`
+- Implement a real embedding generator
 - Add a Qdrant-backed `VectorStore` implementation for upserts
+- Wire FAQ ingestion, chunking, and vectorization into an end-to-end ingestion script
 - Replace the placeholder KB service with real retrieval over the mock KB
 - Ingest FAQ data from `cob_mock_kb_large/very_large_mixed_kb/faqs/faqs.jsonl`
 - Add entity extraction for appointment requests
