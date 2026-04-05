@@ -55,21 +55,27 @@ class QdrantSettings:
 class QdrantVectorDatabaseSetup(VectorDatabaseSetup):
     def __init__(self, settings: QdrantSettings) -> None:
         self._settings = settings
+        self._client: QdrantClient | None = None
 
     @property
     def settings(self) -> QdrantSettings:
         return self._settings
 
     def create_client(self) -> QdrantClient:
+        if self._client is not None:
+            return self._client
+
         if self._settings.url:
-            return QdrantClient(
+            self._client = QdrantClient(
                 url=self._settings.url,
                 api_key=self._settings.api_key,
                 prefer_grpc=self._settings.prefer_grpc,
             )
+            return self._client
 
         self._settings.storage_path.mkdir(parents=True, exist_ok=True)
-        return QdrantClient(path=str(self._settings.storage_path))
+        self._client = QdrantClient(path=str(self._settings.storage_path))
+        return self._client
 
     def ensure_collection(self) -> VectorCollectionSetupResult:
         client = self.create_client()

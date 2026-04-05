@@ -3,17 +3,27 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections.abc import Sequence
 from pathlib import Path
+from typing import TypeVar
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+T = TypeVar("T")
 
 from processing.chunking import FaqChunkingStrategy
 from processing.ingestion_pipeline import FaqJsonlIngestionPipeline, IngestionSource
 from processing.vectorization import (
     DeterministicEmbeddingGenerator,
     FaqVectorizationStrategy,
+)
+from vector_db.contracts import VectorDatabaseSetup, VectorStore
+from vector_db.qdrant import (
+    QdrantSettings,
+    QdrantVectorDatabaseSetup,
+    QdrantVectorStore,
 )
 
 
@@ -39,36 +49,75 @@ def _parse_limit() -> int | None:
     return limit
 
 
+def _parse_batch_size() -> int:
+    raw_batch_size = os.getenv("FAQ_PIPELINE_BATCH_SIZE", "128").strip()
+    batch_size = int(raw_batch_size)
+    if batch_size <= 0:
+        raise ValueError("FAQ_PIPELINE_BATCH_SIZE must be greater than zero.")
+    return batch_size
+
+
+def _batched(items: Sequence[T], batch_size: int) -> list[Sequence[T]]:
+    return [
+        items[index : index + batch_size]
+        for index in range(0, len(items), batch_size)
+    ]
+
+
 def main() -> None:
     source = _build_source()
     limit = _parse_limit()
+    batch_size = _parse_batch_size()
+    qdrant_settings = QdrantSettings.from_env()
 
     ingestion_pipeline = FaqJsonlIngestionPipeline()
     chunking_strategy = FaqChunkingStrategy()
     vectorization_strategy = FaqVectorizationStrategy(
-        DeterministicEmbeddingGenerator()
+        DeterministicEmbeddingGenerator(qdrant_settings.embedding_dimension)
     )
+    qdrant_setup = QdrantVectorDatabaseSetup(qdrant_settings)
+    vector_database: VectorDatabaseSetup = qdrant_setup
+    vector_store: VectorStore = QdrantVectorStore(setup=qdrant_setup)
+
+    setup_result = vector_database.ensure_collection()
 
     ingestion_result = ingestion_pipeline.ingest(source)
     processed_records = ingestion_pipeline.processed_records
     if limit is not None:
         processed_records = processed_records[:limit]
 
-    chunks = []
-    for record in processed_records:
-        chunks.extend(chunking_strategy.chunk(record.as_chunking_input()))
+    total_chunks = 0
+    total_vector_records = 0
+    total_upserted = 0
+    sample_record = None
 
-    vectorization_result = vectorization_strategy.vectorize(chunks)
+    for record_batch in _batched(processed_records, batch_size):
+        chunks = []
+        for record in record_batch:
+            chunks.extend(chunking_strategy.chunk(record.as_chunking_input()))
+
+        vectorization_result = vectorization_strategy.vectorize(chunks)
+        upsert_result = vector_store.upsert_records(vectorization_result.vector_records)
+
+        total_chunks += len(chunks)
+        total_vector_records += vectorization_result.records_processed
+        total_upserted += upsert_result.points_upserted
+
+        if sample_record is None and vectorization_result.vector_records:
+            sample_record = vectorization_result.vector_records[0]
 
     print("FAQ processing pipeline complete.")
     print(f"Source file: {source.file_path}")
+    print(f"Collection: {setup_result.collection_name}")
+    print(f"Embedding dimension: {qdrant_settings.embedding_dimension}")
     print(f"Records ingested: {ingestion_result.records_processed}")
     print(f"Records selected: {len(processed_records)}")
-    print(f"Chunks created: {len(chunks)}")
-    print(f"Vector records created: {vectorization_result.records_processed}")
+    print(f"Batch size: {batch_size}")
+    print(f"Chunks created: {total_chunks}")
+    print(f"Vector records created: {total_vector_records}")
+    print(f"Points upserted: {total_upserted}")
 
-    if vectorization_result.vector_records:
-        sample_record = vectorization_result.vector_records[0]
+    if sample_record is not None:
         print("\nSample vector record:")
         print(f"Record ID: {sample_record.record_id}")
         print(f"Text preview: {sample_record.text[:160]}")

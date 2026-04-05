@@ -262,6 +262,53 @@ Export the graph PNG:
 .venv/bin/python scripts/export_graph_png.py
 ```
 
+## FAQ Pipeline Commands
+
+Run the FAQ processing pipeline and store vectors in Qdrant:
+
+```bash
+.venv/bin/python scripts/run_faq_processing_pipeline.py
+```
+
+Run a small experiment with only 20 FAQ records in a separate local Qdrant path:
+
+```bash
+QDRANT_PATH=vector_db/qdrant/data/experiment_faq_20 FAQ_PIPELINE_LIMIT=20 .venv/bin/python scripts/run_faq_processing_pipeline.py
+```
+
+Key environment variables:
+
+- `FAQS_JSONL_PATH`
+- `FAQ_PIPELINE_LIMIT`
+- `FAQ_PIPELINE_BATCH_SIZE`
+- `QDRANT_PATH`
+- `QDRANT_COLLECTION`
+- `QDRANT_EMBEDDING_DIMENSION`
+
+## Inspect Stored Vectors
+
+Inspect saved vector records from Qdrant:
+
+```bash
+QDRANT_PATH=vector_db/qdrant/data/experiment_faq_20 VECTOR_INSPECT_LIMIT=3 .venv/bin/python scripts/inspect_qdrant_vectors.py
+```
+
+Inspect saved records and include vector values:
+
+```bash
+QDRANT_PATH=vector_db/qdrant/data/experiment_faq_20 VECTOR_INSPECT_LIMIT=1 VECTOR_INSPECT_WITH_VECTORS=true .venv/bin/python scripts/inspect_qdrant_vectors.py
+```
+
+The inspector shows:
+
+- collection name
+- backend path
+- stored point count
+- Qdrant point ID
+- original application `record_id`
+- payload metadata
+- vector dimension and first values when enabled
+
 ## Example interaction
 
 ```text
@@ -285,8 +332,7 @@ Bot: I can help with an appointment request. Please share the service you need, 
 ## Next development steps
 
 - Implement a real embedding generator
-- Add a Qdrant-backed `VectorStore` implementation for upserts
-- Wire FAQ ingestion, chunking, and vectorization into an end-to-end ingestion script
+- Add semantic retrieval and query-time search over stored vectors
 - Replace the placeholder KB service with real retrieval over the mock KB
 - Ingest FAQ data from `cob_mock_kb_large/very_large_mixed_kb/faqs/faqs.jsonl`
 - Add entity extraction for appointment requests
