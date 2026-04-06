@@ -38,6 +38,7 @@ The project separates responsibilities clearly:
 
 - `app/graph/` contains workflow orchestration
 - `app/graph/nodes/` contains thin graph node adapters
+- `app/agents/` contains graph-executable agents that wrap conversational behaviors
 - `app/services/` contains business logic and reusable application services
 - `app/llm/` contains prompt building and model-provider generation logic
 - `processing/` contains ingestion, chunking, and vectorization workflows
@@ -64,6 +65,14 @@ app/
       action_request.py
       human_escalation.py
       response.py
+  agents/
+    __init__.py
+    contracts.py
+    models.py
+    kb_agent.py
+    action_agent.py
+    escalation_agent.py
+    factory.py
   llm/
     __init__.py
     contracts.py
@@ -137,6 +146,16 @@ graph.png
 ### Nodes are thin
 
 Each graph node should do as little as possible. Its job is to receive `ChatState`, call the correct dependency, and return the state update.
+
+### Agents are reusable execution units
+
+The `app/agents/` package provides graph-ready agents such as:
+
+- `KnowledgeBaseAgent`
+- `ActionRequestAgent`
+- `HumanEscalationAgent`
+
+This creates a cleaner expansion path for future agents while keeping graph nodes small.
 
 ### Services hold business logic
 
@@ -411,6 +430,7 @@ Bot: Credentialing includes gathering provider information, preparing payer enro
 ## Documentation
 
 - `README.md`: project overview and usage
+- `KB_AGENT_WALKTHROUGH.md`: end-to-end explanation of the KB agent flow, prompt, retrieval, memory, and fallback behavior
 - `DEVELOPMENT_DECISIONS.md`: architecture and implementation decisions
 - `INTERFACE_DECISIONS.md`: contract-style and package-boundary decisions
 - `RAG_IMPLEMENTATION_PLAN.md`: initial RAG starting point and rollout plan

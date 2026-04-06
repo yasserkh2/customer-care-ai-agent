@@ -1,19 +1,19 @@
+from app.agents import HumanEscalationAgent
 from app.graph.state import ChatState
-from app.services.contracts import EscalationService
 from app.services.responses import HumanEscalationService
 
 
 class HumanEscalationNode:
-    def __init__(self, escalation_service: EscalationService) -> None:
-        self._escalation_service = escalation_service
+    def __init__(self, agent: HumanEscalationAgent) -> None:
+        self._agent = agent
 
     def __call__(self, state: ChatState) -> ChatState:
-        return {
-            "final_response": self._escalation_service.build_response(state),
-        }
+        return self._agent.execute(state)
 
 
-_default_node = HumanEscalationNode(HumanEscalationService())
+_default_node = HumanEscalationNode(
+    HumanEscalationAgent(HumanEscalationService())
+)
 
 
 def human_escalation(state: ChatState) -> ChatState:

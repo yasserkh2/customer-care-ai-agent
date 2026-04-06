@@ -22,15 +22,15 @@ def build_graph(dependencies: GraphDependencies | None = None):
     )
     graph.add_node(
         "kb_answer",
-        KnowledgeBaseAnswerNode(resolved_dependencies.knowledge_base_service),
+        KnowledgeBaseAnswerNode(resolved_dependencies.kb_agent),
     )
     graph.add_node(
         "action_request",
-        ActionRequestNode(resolved_dependencies.action_request_service),
+        ActionRequestNode(resolved_dependencies.action_agent),
     )
     graph.add_node(
         "human_escalation",
-        HumanEscalationNode(resolved_dependencies.escalation_service),
+        HumanEscalationNode(resolved_dependencies.escalation_agent),
     )
     graph.add_node("response", ResponseNode(resolved_dependencies.history_manager))
 

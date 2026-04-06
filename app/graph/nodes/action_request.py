@@ -1,19 +1,17 @@
+from app.agents import ActionRequestAgent
 from app.graph.state import ChatState
-from app.services.contracts import ActionRequestService
 from app.services.responses import AppointmentRequestService
 
 
 class ActionRequestNode:
-    def __init__(self, action_request_service: ActionRequestService) -> None:
-        self._action_request_service = action_request_service
+    def __init__(self, agent: ActionRequestAgent) -> None:
+        self._agent = agent
 
     def __call__(self, state: ChatState) -> ChatState:
-        return {
-            "final_response": self._action_request_service.build_response(state),
-        }
+        return self._agent.execute(state)
 
 
-_default_node = ActionRequestNode(AppointmentRequestService())
+_default_node = ActionRequestNode(ActionRequestAgent(AppointmentRequestService()))
 
 
 def action_request(state: ChatState) -> ChatState:

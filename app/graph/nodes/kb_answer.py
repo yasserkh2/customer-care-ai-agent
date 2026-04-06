@@ -1,18 +1,19 @@
+from app.agents import KnowledgeBaseAgent
 from app.graph.state import ChatState
-from app.services.contracts import KnowledgeBaseService
 from app.services.knowledge_base import RetrievalKnowledgeBaseService
 
 
 class KnowledgeBaseAnswerNode:
-    def __init__(self, knowledge_base_service: KnowledgeBaseService) -> None:
-        self._knowledge_base_service = knowledge_base_service
+    def __init__(self, agent: KnowledgeBaseAgent) -> None:
+        self._agent = agent
 
     def __call__(self, state: ChatState) -> ChatState:
-        answer = self._knowledge_base_service.answer(state)
-        return answer.as_state_update()
+        return self._agent.execute(state)
 
 
-_default_node = KnowledgeBaseAnswerNode(RetrievalKnowledgeBaseService())
+_default_node = KnowledgeBaseAnswerNode(
+    KnowledgeBaseAgent(RetrievalKnowledgeBaseService())
+)
 
 
 def kb_answer(state: ChatState) -> ChatState:

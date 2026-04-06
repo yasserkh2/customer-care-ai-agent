@@ -335,10 +335,7 @@ class RetrievalKnowledgeBaseService:
         if item.lexical_overlap > 0:
             return True
 
-        if len(query_tokens) <= 1:
-            return item.vector_score >= 0.8
-
-        return item.vector_score >= 0.92
+        return item.vector_score >= 0.97
 
     def _build_fallback_answer(self, best_item: FaqContextItem) -> str:
         answer = (

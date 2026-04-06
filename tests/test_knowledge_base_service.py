@@ -156,7 +156,7 @@ class RetrievalKnowledgeBaseServiceTests(unittest.TestCase):
             ],
         )
         self.assertEqual(answer_generator.calls[0]["user_query"], "What does credentialing include?")
-        self.assertEqual(len(answer_generator.calls[0]["retrieved_context"]), 2)
+        self.assertEqual(len(answer_generator.calls[0]["retrieved_context"]), 1)
         self.assertEqual(answer_generator.calls[0]["conversation_history"], [])
 
     def test_falls_back_to_extractive_answer_when_generation_fails(self) -> None:
