@@ -227,6 +227,7 @@ class AppointmentActionServiceTests(unittest.TestCase):
         result = service.handle_turn({"user_query": "I'd like to schedule an appointment."})
 
         self.assertEqual(result["active_action"], "appointment_scheduling")
+        self.assertEqual(result["turn_outcome"], "needs_input")
         self.assertEqual(result["appointment_slots"], {})
         self.assertEqual(result["missing_slots"], ["service", "date", "time", "name", "email"])
         self.assertIn("available services are", result["final_response"])
@@ -402,6 +403,7 @@ class AppointmentActionServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(result["booking_confirmation_id"], "apt_1234567890")
+        self.assertEqual(result["turn_outcome"], "resolved")
         self.assertEqual(len(booking_client.booking_calls), 1)
 
     def test_service_date_and_vague_time_offer_available_dates_first(self) -> None:
@@ -728,6 +730,9 @@ class AppointmentActionServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(result["booking_error"], "booking_request_failed")
+        self.assertEqual(result["turn_outcome"], "unresolved")
+        self.assertEqual(result["turn_failure_reason"], "booking_request_failed")
+        self.assertIn("transfer this appointment request", result["escalation_reason"])
         self.assertIn("could not complete the appointment booking", result["final_response"])
         self.assertEqual(result["appointment_slots"]["service"], "Credentialing")
 
@@ -771,6 +776,9 @@ class AppointmentActionServiceTests(unittest.TestCase):
         result = service.handle_turn({"user_query": "today"})
 
         self.assertEqual(result["booking_error"], "action_extraction_failed")
+        self.assertEqual(result["turn_outcome"], "unresolved")
+        self.assertEqual(result["turn_failure_reason"], "action_extraction_failed")
+        self.assertIn("transfer this appointment request", result["escalation_reason"])
         self.assertEqual(
             result["final_response"],
             "Action LLM failed to extract appointment details: extractor offline",

@@ -27,6 +27,7 @@ class HumanEscalationService:
     def build_response(self, state: ChatState) -> str:
         reason = state.get("escalation_reason") or "This request needs human support."
         return (
-            "I am escalating this conversation to a human agent. "
+            "I need to transfer this conversation to a human agent. "
+            "A human agent will follow up with you. "
             f"Reason: {reason}"
         )

@@ -100,6 +100,12 @@ class AppointmentActionService:
                 time_confirmed=time_confirmed,
                 awaiting_confirmation=awaiting_confirmation,
                 booking_error="action_extraction_failed",
+                turn_outcome="unresolved",
+                turn_failure_reason="action_extraction_failed",
+                escalation_reason=(
+                    "I need to transfer this appointment request to a human "
+                    "agent because I could not process the scheduling details."
+                ),
                 final_response=self._build_llm_error_reply(
                     stage="extract appointment details",
                     error=exc,
@@ -494,6 +500,12 @@ class AppointmentActionService:
                 time_confirmed=False,
                 awaiting_confirmation=False,
                 booking_error="booking_request_failed",
+                turn_outcome="unresolved",
+                turn_failure_reason="booking_request_failed",
+                escalation_reason=(
+                    "I need to transfer this appointment request to a human "
+                    "agent because the booking step could not be completed."
+                ),
                 final_response=self._build_action_reply(
                     phase="booking_error",
                     user_query="",
@@ -531,6 +543,9 @@ class AppointmentActionService:
             "booking_confirmation_id": booking_result.confirmation_id,
             "booking_result": booking_result_payload,
             "booking_error": None,
+            "turn_outcome": "resolved",
+            "turn_failure_reason": None,
+            "escalation_reason": None,
             "final_response": self._build_action_reply(
                 phase="booking_success",
                 user_query="",
@@ -731,6 +746,9 @@ class AppointmentActionService:
         awaiting_confirmation: bool,
         final_response: str,
         booking_error: str | None = None,
+        turn_outcome: str = "needs_input",
+        turn_failure_reason: str | None = None,
+        escalation_reason: str | None = None,
         invalid_field: str | None = None,
         validation_error: str | None = None,
     ) -> ChatState:
@@ -746,6 +764,9 @@ class AppointmentActionService:
             "booking_confirmation_id": None,
             "booking_result": None,
             "booking_error": booking_error,
+            "turn_outcome": turn_outcome,
+            "turn_failure_reason": turn_failure_reason,
+            "escalation_reason": escalation_reason,
             "final_response": final_response,
         }
 

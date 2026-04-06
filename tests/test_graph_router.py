@@ -2,10 +2,19 @@ from __future__ import annotations
 
 import unittest
 
-from app.graph.router import ActiveFlowRouter
+from app.graph.router import ActiveFlowRouter, PostTurnRouter, ServiceResultRouter
 
 
 class ActiveFlowRouterTests(unittest.TestCase):
+    def test_routes_handoff_pending_turn_directly_to_human_escalation(self) -> None:
+        router = ActiveFlowRouter()
+
+        route = router(
+            {"handoff_pending": True, "active_action": "appointment_scheduling"}
+        )
+
+        self.assertEqual(route, "human_escalation")
+
     def test_routes_active_appointment_flow_directly_to_action_request(self) -> None:
         router = ActiveFlowRouter()
 
@@ -19,6 +28,31 @@ class ActiveFlowRouterTests(unittest.TestCase):
         route = router({"active_action": None})
 
         self.assertEqual(route, "classify_intent")
+
+
+class ServiceResultRouterTests(unittest.TestCase):
+    def test_routes_service_result_to_evaluate_escalation_by_default(self) -> None:
+        router = ServiceResultRouter()
+
+        route = router({"handoff_pending": False})
+
+        self.assertEqual(route, "evaluate_escalation")
+
+
+class PostTurnRouterTests(unittest.TestCase):
+    def test_routes_evaluator_result_to_human_when_handoff_is_pending(self) -> None:
+        router = PostTurnRouter()
+
+        route = router({"handoff_pending": True})
+
+        self.assertEqual(route, "human_escalation")
+
+    def test_routes_evaluator_result_to_response_when_no_handoff_is_pending(self) -> None:
+        router = PostTurnRouter()
+
+        route = router({"handoff_pending": False})
+
+        self.assertEqual(route, "response")
 
 
 if __name__ == "__main__":

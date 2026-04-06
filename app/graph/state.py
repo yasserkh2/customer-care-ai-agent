@@ -2,6 +2,7 @@ from typing import Any, Literal, TypedDict
 
 
 Intent = Literal["kb_query", "action_request", "human_escalation", "unknown"]
+TurnOutcome = Literal["resolved", "needs_input", "unresolved"]
 
 
 class ChatState(TypedDict, total=False):
@@ -10,7 +11,10 @@ class ChatState(TypedDict, total=False):
     confidence: float
     entities: dict[str, Any]
     history: list[str]
+    handoff_pending: bool
     failure_count: int
+    turn_outcome: TurnOutcome
+    turn_failure_reason: str | None
     frustration_flag: bool
     escalation_reason: str | None
     retrieved_context: list[str]
@@ -37,7 +41,10 @@ def create_initial_state(user_query: str) -> ChatState:
         "confidence": 0.0,
         "entities": {},
         "history": [],
+        "handoff_pending": False,
         "failure_count": 0,
+        "turn_outcome": "resolved",
+        "turn_failure_reason": None,
         "frustration_flag": False,
         "escalation_reason": None,
         "retrieved_context": [],

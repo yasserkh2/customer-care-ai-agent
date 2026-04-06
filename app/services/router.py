@@ -11,6 +11,9 @@ class DefaultIntentRouter:
         )
 
     def route(self, state: ChatState) -> str:
+        if state.get("handoff_pending"):
+            return "human_escalation"
+
         if state.get("frustration_flag"):
             return "human_escalation"
 

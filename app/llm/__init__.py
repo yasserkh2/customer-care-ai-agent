@@ -10,11 +10,17 @@ from app.llm.action_prompts import (
     DEFAULT_ACTION_AGENT_SYSTEM_PROMPT,
     build_action_agent_user_prompt,
 )
-from app.llm.contracts import ActionReplyGenerator, AnswerGenerator
+from app.llm.contracts import ActionReplyGenerator, AnswerGenerator, IntentDecisionGenerator
 from app.llm.factory import KbAnswerGeneratorFactory
+from app.llm.intent_factory import IntentDecisionGeneratorFactory
+from app.llm.intent_prompts import (
+    DEFAULT_INTENT_CLASSIFIER_SYSTEM_PROMPT,
+    build_intent_classifier_prompt,
+)
 from app.llm.providers import (
     AzureOpenAIActionReplyGenerator,
     AzureOpenAIAppointmentExtractor,
+    AzureOpenAIIntentDecisionGenerator,
     AzureOpenAIKbAnswerGenerator,
 )
 from app.llm.prompts import (
@@ -26,17 +32,22 @@ from app.llm.prompts import (
 __all__ = [
     "AnswerGenerator",
     "ActionReplyGenerator",
+    "IntentDecisionGenerator",
     "ActionReplyGeneratorFactory",
     "AppointmentExtractorFactory",
     "AzureOpenAIActionReplyGenerator",
     "AzureOpenAIAppointmentExtractor",
+    "AzureOpenAIIntentDecisionGenerator",
     "AzureOpenAIKbAnswerGenerator",
     "DEFAULT_ACTION_AGENT_SYSTEM_PROMPT",
     "DEFAULT_ACTION_EXTRACTION_SYSTEM_PROMPT",
     "KbAnswerGeneratorFactory",
+    "IntentDecisionGeneratorFactory",
     "build_action_agent_user_prompt",
     "build_action_extraction_prompt",
     "DEFAULT_KB_SYSTEM_PROMPT",
+    "DEFAULT_INTENT_CLASSIFIER_SYSTEM_PROMPT",
     "build_kb_user_prompt",
+    "build_intent_classifier_prompt",
     "is_conversational_query",
 ]

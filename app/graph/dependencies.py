@@ -8,6 +8,7 @@ from app.llm.action_extraction import AppointmentExtractorFactory
 from app.services.contracts import (
     ActionRequestService,
     ConversationHistoryManager,
+    EscalationEvaluator,
     EscalationService,
     IntentClassifier,
     IntentRouter,
@@ -15,8 +16,9 @@ from app.services.contracts import (
 )
 from app.services.action_request import AppointmentActionService
 from app.services.booking_api import LocalMockBookingApiClient
+from app.services.escalation import PostTurnEscalationEvaluator
 from app.services.history import DefaultConversationHistoryManager
-from app.services.intent import KeywordIntentClassifier
+from app.services.intent import LlmIntentClassifier
 from app.services.knowledge_base import RetrievalKnowledgeBaseService
 from app.services.responses import (
     HumanEscalationService,
@@ -31,6 +33,7 @@ class GraphDependencies:
     knowledge_base_service: KnowledgeBaseService
     action_request_service: ActionRequestService
     escalation_service: EscalationService
+    escalation_evaluator: EscalationEvaluator
     intent_router: IntentRouter
     kb_agent: KnowledgeBaseAgent
     action_agent: ActionRequestAgent
@@ -46,6 +49,7 @@ class GraphDependencies:
             response_generator=ActionReplyGeneratorFactory().build(),
         )
         escalation_service = HumanEscalationService()
+        escalation_evaluator = PostTurnEscalationEvaluator()
         agent_factory = AgentFactory(
             knowledge_base_service=knowledge_base_service,
             action_request_service=action_request_service,
@@ -53,10 +57,11 @@ class GraphDependencies:
         )
         return cls(
             history_manager=history_manager,
-            intent_classifier=KeywordIntentClassifier(),
+            intent_classifier=LlmIntentClassifier(),
             knowledge_base_service=knowledge_base_service,
             action_request_service=action_request_service,
             escalation_service=escalation_service,
+            escalation_evaluator=escalation_evaluator,
             intent_router=DefaultIntentRouter(),
             kb_agent=agent_factory.build_kb_agent(),
             action_agent=agent_factory.build_action_agent(),

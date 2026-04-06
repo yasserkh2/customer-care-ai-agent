@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import json
+import re
 from urllib import parse
 
 from app.llm.action_prompts import (
@@ -8,8 +10,14 @@ from app.llm.action_prompts import (
     build_action_agent_user_prompt,
 )
 from app.llm.http import post_json
+from app.llm.intent_prompts import (
+    DEFAULT_INTENT_CLASSIFIER_SYSTEM_PROMPT,
+    build_intent_classifier_prompt,
+    parse_intent_decision_payload,
+)
 from app.llm.prompts import DEFAULT_KB_SYSTEM_PROMPT, build_kb_user_prompt
 from app.services.action_models import AppointmentActionReplyContext
+from app.services.models import IntentDecision
 
 
 class GeminiKbAnswerGenerator:
@@ -174,3 +182,109 @@ class GeminiActionReplyGenerator:
         if model_name.startswith("models/"):
             return model_name
         return f"models/{model_name}"
+
+
+class GeminiIntentDecisionGenerator:
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        system_prompt: str = DEFAULT_INTENT_CLASSIFIER_SYSTEM_PROMPT,
+        base_url: str = "https://generativelanguage.googleapis.com/v1beta",
+        timeout_seconds: int = 60,
+    ) -> None:
+        if not api_key.strip():
+            raise ValueError("GEMINI_API_KEY must not be empty.")
+        if not model.strip():
+            raise ValueError("Gemini model must not be empty.")
+
+        self._api_key = api_key
+        self._model = self._normalize_model_name(model)
+        self._system_prompt = system_prompt
+        self._base_url = base_url.rstrip("/")
+        self._timeout_seconds = timeout_seconds
+
+    @classmethod
+    def from_env(cls) -> "GeminiIntentDecisionGenerator":
+        return cls(
+            api_key=os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", "")),
+            model=os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash"),
+            system_prompt=os.getenv(
+                "INTENT_CLASSIFIER_SYSTEM_PROMPT",
+                DEFAULT_INTENT_CLASSIFIER_SYSTEM_PROMPT,
+            ),
+        )
+
+    def classify_intent(
+        self,
+        user_query: str,
+        conversation_history: list[str],
+        active_action: str | None,
+        failure_count: int,
+    ) -> IntentDecision:
+        prompt = build_intent_classifier_prompt(
+            user_query=user_query,
+            conversation_history=conversation_history,
+            active_action=active_action,
+            failure_count=failure_count,
+        )
+        endpoint = (
+            f"{self._base_url}/{self._model}:generateContent"
+            f"?{parse.urlencode({'key': self._api_key})}"
+        )
+        payload = {
+            "system_instruction": {"parts": [{"text": self._system_prompt}]},
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0},
+        }
+        response_payload = post_json(
+            url=endpoint,
+            payload=payload,
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": self._api_key,
+            },
+            timeout_seconds=self._timeout_seconds,
+            provider_name="Gemini intent classification",
+        )
+        candidates = response_payload.get("candidates")
+        if not isinstance(candidates, list) or not candidates:
+            raise RuntimeError("Gemini intent classification did not contain candidates.")
+
+        content = candidates[0].get("content", {})
+        parts = content.get("parts")
+        if not isinstance(parts, list):
+            raise RuntimeError(
+                "Gemini intent classification did not contain content parts."
+            )
+
+        text = "\n".join(
+            part.get("text", "").strip()
+            for part in parts
+            if isinstance(part, dict) and isinstance(part.get("text"), str)
+        ).strip()
+        if not text:
+            raise RuntimeError("Gemini intent classification did not contain text content.")
+        return _parse_intent_decision_text(text)
+
+    @staticmethod
+    def _normalize_model_name(model: str) -> str:
+        model_name = model.strip()
+        if model_name.startswith("models/"):
+            return model_name
+        return f"models/{model_name}"
+
+
+def _parse_intent_decision_text(content: str) -> IntentDecision:
+    json_block_match = re.search(r"\{.*\}", content, re.DOTALL)
+    raw_json = json_block_match.group(0) if json_block_match else content
+    payload = json.loads(raw_json)
+    if not isinstance(payload, dict):
+        raise RuntimeError("Intent classification payload was not a JSON object.")
+    parsed = parse_intent_decision_payload(payload)
+    return IntentDecision(
+        intent=parsed["intent"],
+        confidence=parsed["confidence"],
+        frustration_flag=parsed["frustration_flag"],
+        escalation_reason=parsed["escalation_reason"],
+    )

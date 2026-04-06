@@ -12,8 +12,14 @@ from app.llm.action_prompts import (
     build_action_agent_user_prompt,
 )
 from app.llm.http import post_json
+from app.llm.intent_prompts import (
+    DEFAULT_INTENT_CLASSIFIER_SYSTEM_PROMPT,
+    build_intent_classifier_prompt,
+    parse_intent_decision_payload,
+)
 from app.llm.prompts import DEFAULT_KB_SYSTEM_PROMPT, build_kb_user_prompt
 from app.services.action_models import AppointmentActionReplyContext, AppointmentExtraction
+from app.services.models import IntentDecision
 
 
 class AzureOpenAIKbAnswerGenerator:
@@ -249,6 +255,91 @@ class AzureOpenAIAppointmentExtractor:
         )
 
 
+class AzureOpenAIIntentDecisionGenerator:
+    def __init__(
+        self,
+        api_key: str,
+        endpoint: str,
+        deployment: str,
+        api_version: str,
+        system_prompt: str = DEFAULT_INTENT_CLASSIFIER_SYSTEM_PROMPT,
+        timeout_seconds: int = 60,
+    ) -> None:
+        self._api_key = _require_non_empty(api_key, "AZURE_OPENAI_API_KEY")
+        self._endpoint = _normalize_endpoint(
+            _require_non_empty(endpoint, "AZURE_OPENAI_ENDPOINT")
+        )
+        self._deployment = _require_non_empty(
+            deployment,
+            "AZURE_OPENAI_CHAT_DEPLOYMENT",
+        )
+        self._api_version = _require_non_empty(
+            api_version,
+            "AZURE_OPENAI_API_VERSION",
+        )
+        self._system_prompt = system_prompt
+        self._timeout_seconds = timeout_seconds
+
+    @classmethod
+    def from_env(cls) -> "AzureOpenAIIntentDecisionGenerator":
+        return cls(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY", ""),
+            endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
+            deployment=os.getenv(
+                "AZURE_OPENAI_CHAT_DEPLOYMENT",
+                os.getenv("AZURE_OPENAI_DEPLOYMENT", ""),
+            ),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            system_prompt=os.getenv(
+                "INTENT_CLASSIFIER_SYSTEM_PROMPT",
+                DEFAULT_INTENT_CLASSIFIER_SYSTEM_PROMPT,
+            ),
+        )
+
+    def classify_intent(
+        self,
+        user_query: str,
+        conversation_history: list[str],
+        active_action: str | None,
+        failure_count: int,
+    ) -> IntentDecision:
+        prompt = build_intent_classifier_prompt(
+            user_query=user_query,
+            conversation_history=conversation_history,
+            active_action=active_action,
+            failure_count=failure_count,
+        )
+        response_payload = post_json(
+            url=_build_chat_completions_url(
+                endpoint=self._endpoint,
+                deployment=self._deployment,
+                api_version=self._api_version,
+            ),
+            payload={
+                "messages": [
+                    {"role": "system", "content": self._system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0,
+            },
+            headers=_azure_headers(self._api_key),
+            timeout_seconds=self._timeout_seconds,
+            provider_name="Azure OpenAI intent classification",
+        )
+        content = _parse_chat_completion_text(
+            response_payload,
+            error_prefix="Azure OpenAI intent classification",
+        )
+        payload = _extract_json_payload(content)
+        parsed = parse_intent_decision_payload(payload)
+        return IntentDecision(
+            intent=parsed["intent"],
+            confidence=parsed["confidence"],
+            frustration_flag=parsed["frustration_flag"],
+            escalation_reason=parsed["escalation_reason"],
+        )
+
+
 def _build_chat_completions_url(
     endpoint: str,
     deployment: str,
@@ -295,6 +386,18 @@ def _extract_string_field(content: str, field_name: str) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
+
+
+def _extract_json_payload(content: str) -> dict[str, object]:
+    import json
+    import re
+
+    json_block_match = re.search(r"\{.*\}", content, re.DOTALL)
+    raw_json = json_block_match.group(0) if json_block_match else content
+    payload = json.loads(raw_json)
+    if not isinstance(payload, dict):
+        raise RuntimeError("Intent classification payload was not a JSON object.")
+    return payload
 
 
 def _normalize_endpoint(endpoint: str) -> str:

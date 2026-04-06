@@ -4,6 +4,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from app.graph.state import ChatState
+from app.llm.contracts import IntentDecisionGenerator
+from app.llm.intent_factory import IntentDecisionGeneratorFactory
 from app.services.models import IntentDecision
 
 
@@ -16,7 +18,18 @@ class IntentKeywordCatalog:
     )
     escalation_keywords: frozenset[str] = field(
         default_factory=lambda: frozenset(
-            {"human", "agent", "manager", "complaint", "representative"}
+            {
+                "human",
+                "agent",
+                "manager",
+                "complaint",
+                "representative",
+                "supervisor",
+                "transfer",
+                "handoff",
+                "escalat",
+                "escilat",
+            }
         )
     )
     frustration_keywords: frozenset[str] = field(
@@ -38,9 +51,7 @@ class KeywordIntentClassifier:
             normalized_query, self._keyword_catalog.frustration_keywords
         )
 
-        if frustration_flag or self._contains_any(
-            normalized_query, self._keyword_catalog.escalation_keywords
-        ):
+        if frustration_flag or self._is_explicit_escalation_request(normalized_query):
             return IntentDecision(
                 intent="human_escalation",
                 confidence=0.9,
@@ -73,3 +84,51 @@ class KeywordIntentClassifier:
     @staticmethod
     def _contains_any(text: str, keywords: Iterable[str]) -> bool:
         return any(keyword in text for keyword in keywords)
+
+    def _is_explicit_escalation_request(self, text: str) -> bool:
+        if self._contains_any(text, self._keyword_catalog.escalation_keywords):
+            return True
+
+        escalation_phrases = (
+            "talk to a human",
+            "talk to an agent",
+            "real person",
+            "need a human",
+            "connect me to support",
+            "speak to someone",
+        )
+        return any(phrase in text for phrase in escalation_phrases)
+
+
+class LlmIntentClassifier:
+    def __init__(
+        self,
+        decision_generator: IntentDecisionGenerator | None = None,
+        fallback_classifier: KeywordIntentClassifier | None = None,
+    ) -> None:
+        self._fallback_classifier = fallback_classifier or KeywordIntentClassifier()
+        if decision_generator is not None:
+            self._decision_generator = decision_generator
+        else:
+            self._decision_generator = self._build_generator()
+
+    def classify(self, state: ChatState) -> IntentDecision:
+        if self._decision_generator is None:
+            return self._fallback_classifier.classify(state)
+
+        try:
+            return self._decision_generator.classify_intent(
+                user_query=state.get("user_query", ""),
+                conversation_history=list(state.get("history", [])),
+                active_action=state.get("active_action"),
+                failure_count=int(state.get("failure_count", 0)),
+            )
+        except Exception:
+            return self._fallback_classifier.classify(state)
+
+    @staticmethod
+    def _build_generator() -> IntentDecisionGenerator | None:
+        try:
+            return IntentDecisionGeneratorFactory().build()
+        except Exception:
+            return None

@@ -106,7 +106,8 @@ class RetrievalKnowledgeBaseService:
                 final_response=(
                     "Please share your question and I will look for the closest "
                     "knowledge-base answer."
-                )
+                ),
+                turn_outcome="needs_input",
             )
 
         history = list(state.get("history", []))
@@ -116,7 +117,8 @@ class RetrievalKnowledgeBaseService:
                 final_response=self._generate_conversational_or_fallback_answer(
                     user_query=query,
                     conversation_history=history,
-                )
+                ),
+                turn_outcome="resolved",
             )
 
         try:
@@ -126,7 +128,9 @@ class RetrievalKnowledgeBaseService:
                 final_response=(
                     "I could not access the knowledge base just now. "
                     "Please try again after the retrieval setup is ready."
-                )
+                ),
+                turn_outcome="unresolved",
+                turn_failure_reason="knowledge_base_unavailable",
             )
 
         if not matches:
@@ -134,7 +138,9 @@ class RetrievalKnowledgeBaseService:
                 final_response=(
                     "I could not find a grounded answer in the knowledge base yet. "
                     "Please rephrase your question or share a little more detail."
-                )
+                ),
+                turn_outcome="unresolved",
+                turn_failure_reason="no_grounded_answer",
             )
 
         context_items = self._build_ranked_context_items(query=query, matches=matches)
@@ -143,7 +149,9 @@ class RetrievalKnowledgeBaseService:
                 final_response=(
                     "I could not find a grounded answer in the knowledge base yet. "
                     "Please rephrase your question or share a little more detail."
-                )
+                ),
+                turn_outcome="unresolved",
+                turn_failure_reason="no_grounded_answer",
             )
 
         retrieved_context = [
@@ -158,6 +166,7 @@ class RetrievalKnowledgeBaseService:
         return KnowledgeBaseAnswer(
             final_response=final_response,
             retrieved_context=retrieved_context,
+            turn_outcome="resolved",
         )
 
     def _retrieve(self, query: str) -> list[VectorSearchMatch]:

@@ -134,6 +134,8 @@ class RetrievalKnowledgeBaseServiceTests(unittest.TestCase):
             "Credentialing includes primary source verification and application "
             "review. This answer is based on the retrieved FAQ context.",
         )
+        self.assertEqual(result.turn_outcome, "resolved")
+        self.assertIsNone(result.turn_failure_reason)
         self.assertEqual(
             result.retrieved_context[0],
             "FAQ: faq_001\n"
@@ -192,6 +194,7 @@ class RetrievalKnowledgeBaseServiceTests(unittest.TestCase):
             "Credentialing includes primary source verification and application "
             "review.\n\nService: Credentialing | Source: FAQ faq_001",
         )
+        self.assertEqual(result.turn_outcome, "resolved")
 
     def test_returns_no_match_message_when_search_is_empty(self) -> None:
         service = RetrievalKnowledgeBaseService(
@@ -203,6 +206,8 @@ class RetrievalKnowledgeBaseServiceTests(unittest.TestCase):
         result = service.answer({"user_query": "Do you offer weekend support?"})
 
         self.assertIn("could not find a grounded answer", result.final_response)
+        self.assertEqual(result.turn_outcome, "unresolved")
+        self.assertEqual(result.turn_failure_reason, "no_grounded_answer")
         self.assertEqual(list(result.retrieved_context), [])
 
     def test_returns_unavailable_message_when_retrieval_fails(self) -> None:
@@ -215,6 +220,8 @@ class RetrievalKnowledgeBaseServiceTests(unittest.TestCase):
         result = service.answer({"user_query": "What is the status?"})
 
         self.assertIn("could not access the knowledge base", result.final_response)
+        self.assertEqual(result.turn_outcome, "unresolved")
+        self.assertEqual(result.turn_failure_reason, "knowledge_base_unavailable")
         self.assertEqual(list(result.retrieved_context), [])
 
     def test_greeting_uses_conversational_generation_without_retrieval(self) -> None:
@@ -235,6 +242,7 @@ class RetrievalKnowledgeBaseServiceTests(unittest.TestCase):
             result.final_response,
             "Hello! How can I help you with COB Company's services or policies today?",
         )
+        self.assertEqual(result.turn_outcome, "resolved")
         self.assertEqual(list(result.retrieved_context), [])
         self.assertEqual(embedding_generator.queries, [])
         self.assertEqual(searcher.calls, [])
@@ -271,6 +279,7 @@ class RetrievalKnowledgeBaseServiceTests(unittest.TestCase):
         result = service.answer({"user_query": "What does credentialing include?"})
 
         self.assertIn("could not find a grounded answer", result.final_response)
+        self.assertEqual(result.turn_outcome, "unresolved")
         self.assertEqual(list(result.retrieved_context), [])
 
 

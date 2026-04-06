@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from app.graph.state import ChatState, Intent
+from app.graph.state import ChatState, Intent, TurnOutcome
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,9 +26,15 @@ class IntentDecision:
 class KnowledgeBaseAnswer:
     final_response: str
     retrieved_context: Sequence[str] = ()
+    turn_outcome: TurnOutcome = "resolved"
+    turn_failure_reason: str | None = None
+    escalation_reason: str | None = None
 
     def as_state_update(self) -> ChatState:
         return {
             "final_response": self.final_response,
             "retrieved_context": list(self.retrieved_context),
+            "turn_outcome": self.turn_outcome,
+            "turn_failure_reason": self.turn_failure_reason,
+            "escalation_reason": self.escalation_reason,
         }

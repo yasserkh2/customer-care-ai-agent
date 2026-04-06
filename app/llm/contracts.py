@@ -7,6 +7,7 @@ from app.services.action_models import (
     AppointmentActionPlanningContext,
     AppointmentActionReplyContext,
 )
+from app.services.models import IntentDecision
 
 
 class AnswerGenerator(Protocol):
@@ -29,4 +30,15 @@ class ActionDecisionGenerator(Protocol):
         self,
         context: AppointmentActionPlanningContext,
     ) -> AppointmentActionDecision:
+        ...
+
+
+class IntentDecisionGenerator(Protocol):
+    def classify_intent(
+        self,
+        user_query: str,
+        conversation_history: list[str],
+        active_action: str | None,
+        failure_count: int,
+    ) -> IntentDecision:
         ...

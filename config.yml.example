@@ -1,6 +1,7 @@
 kb_answer_provider: azure_openai
 action_agent_provider: azure_openai
 action_extraction_provider: azure_openai
+intent_classifier_provider: azure_openai
 
 embedding_provider: gemini
 

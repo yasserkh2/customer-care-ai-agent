@@ -43,3 +43,8 @@ class ActionRequestService(Protocol):
 class EscalationService(Protocol):
     def build_response(self, state: ChatState) -> str:
         ...
+
+
+class EscalationEvaluator(Protocol):
+    def evaluate(self, state: ChatState) -> ChatState:
+        ...
