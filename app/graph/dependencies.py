@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.agents import AgentFactory, ActionRequestAgent, HumanEscalationAgent, KnowledgeBaseAgent
+from app.llm.action_factory import ActionReplyGeneratorFactory
+from app.llm.action_extraction import AppointmentExtractorFactory
 from app.services.contracts import (
     ActionRequestService,
     ConversationHistoryManager,
@@ -11,11 +13,12 @@ from app.services.contracts import (
     IntentRouter,
     KnowledgeBaseService,
 )
+from app.services.action_request import AppointmentActionService
+from app.services.booking_api import LocalMockBookingApiClient
 from app.services.history import DefaultConversationHistoryManager
 from app.services.intent import KeywordIntentClassifier
 from app.services.knowledge_base import RetrievalKnowledgeBaseService
 from app.services.responses import (
-    AppointmentRequestService,
     HumanEscalationService,
 )
 from app.services.router import DefaultIntentRouter
@@ -37,7 +40,11 @@ class GraphDependencies:
     def default(cls) -> "GraphDependencies":
         history_manager = DefaultConversationHistoryManager()
         knowledge_base_service = RetrievalKnowledgeBaseService()
-        action_request_service = AppointmentRequestService()
+        action_request_service = AppointmentActionService(
+            extractor=AppointmentExtractorFactory().build(),
+            booking_api_client=LocalMockBookingApiClient(),
+            response_generator=ActionReplyGeneratorFactory().build(),
+        )
         escalation_service = HumanEscalationService()
         agent_factory = AgentFactory(
             knowledge_base_service=knowledge_base_service,

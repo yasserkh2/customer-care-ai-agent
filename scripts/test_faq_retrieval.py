@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.config import load_env_file
+from app.config import load_runtime_config
 from processing.vectorization import build_embedding_generator
 from vector_db.contracts import VectorSearcher
 from vector_db.qdrant import QdrantSettings, QdrantVectorSearcher
@@ -33,7 +33,10 @@ def _parse_with_vectors() -> bool:
 
 
 def main() -> None:
-    load_env_file(PROJECT_ROOT / ".env")
+    load_runtime_config(
+        config_path=PROJECT_ROOT / "config.yml",
+        env_path=PROJECT_ROOT / ".env",
+    )
 
     query_text = os.getenv(
         "FAQ_RETRIEVAL_QUERY",

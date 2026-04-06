@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 T = TypeVar("T")
 
-from app.config import load_env_file
+from app.config import load_runtime_config
 from processing.chunking import FaqChunkingStrategy
 from processing.ingestion_pipeline import FaqJsonlIngestionPipeline, IngestionSource
 from processing.vectorization import (
@@ -89,7 +89,10 @@ def _print_progress(
 
 
 def main() -> None:
-    load_env_file(PROJECT_ROOT / ".env")
+    load_runtime_config(
+        config_path=PROJECT_ROOT / "config.yml",
+        env_path=PROJECT_ROOT / ".env",
+    )
 
     source = _build_source()
     limit = _parse_limit()

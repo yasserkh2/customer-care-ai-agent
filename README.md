@@ -10,7 +10,9 @@ The project is set up as a runnable foundation for a customer support chatbot. I
 - Intent classification
 - Graph-based routing
 - Knowledge-base answer path with retrieval plus grounded RAG answering
-- Appointment request response path
+- Multi-turn appointment action agent with mock external integration
+- YAML-based runtime config through `config.yml` with `.env` overrides
+- Azure OpenAI support for KB answers, action replies, and action extraction
 - Human escalation response path
 - Shared chat state and conversation history handling
 - Session memory in the CLI chat loop
@@ -20,7 +22,7 @@ The project is set up as a runnable foundation for a customer support chatbot. I
 - Graph PNG export
 - OOP and SOLID documentation
 
-This is a strong base for continuing the real implementation of retrieval, slot filling, confirmations, and external integrations.
+This is a strong base for continuing retrieval, state-safe action flows, confirmations, and external integrations.
 
 ## Architecture
 
@@ -75,16 +77,22 @@ app/
     factory.py
   llm/
     __init__.py
+    action_extraction.py
+    action_planning.py
     contracts.py
     factory.py
     http.py
     prompts.py
     providers/
       __init__.py
+      azure_openai.py
       gemini.py
       openai.py
   services/
     __init__.py
+    action_models.py
+    action_request.py
+    booking_api.py
     contracts.py
     history.py
     intent.py
@@ -92,6 +100,9 @@ app/
     models.py
     responses.py
     router.py
+  mock_api/
+    __init__.py
+    booking_api.py
 processing/
   __init__.py
   ingestion_pipeline/
@@ -210,7 +221,7 @@ The router sends the conversation to:
 
 The knowledge-base path now retrieves FAQ context from Qdrant and uses a grounded generation prompt to produce the final answer. If generation is not configured or fails, it falls back to the best extractive FAQ answer.
 
-The action request path currently returns a guided follow-up asking for service, date, and time.
+The action request path is now a real multi-turn appointment agent. It collects booking fields across turns, validates service/date/time/name/email state in code, asks for one missing field at a time, lets the LLM phrase the reply naturally, asks for confirmation only when the booking is complete, and then submits a mock booking request.
 
 The escalation path returns a human handoff message with a reason when available.
 
@@ -253,11 +264,48 @@ Current providers:
 
 The vectorization pipeline embeds stored FAQ chunks as documents, while retrieval embeds incoming user questions as queries. This matters for providers such as Gemini that support retrieval-specific task types.
 
+### Action agent
+
+The appointment flow is now implemented as a real stateful action agent.
+
+Current behavior:
+
+- extracts booking fields with Gemini, OpenAI, or Azure OpenAI through `app/llm/action_extraction.py`
+- stores slots in `ChatState`
+- asks for one missing field at a time across turns
+- fetches available time slots through a local mock HTTP API
+- validates malformed slot values such as incomplete email addresses
+- confirms the final booking details only after all required fields are complete and date/time are confirmed
+- creates a mock booking with a confirmation id
+
+The action service is intentionally split this way:
+
+- the LLM handles structured extraction and natural-language replies
+- the service layer validates slot state and controls when the flow can advance
+- confirmation is LLM-driven through `confirmation_intent`
+- the action service does not use regex-based confirmation shortcuts
+
+The external integration boundary is intentionally separated:
+
+- `app/services/booking_api.py` is the client
+- `app/mock_api/booking_api.py` is the local mock endpoint
+
+This keeps the graph and agent logic independent from the transport details and gives a clean replacement path for a future real calendar or booking API.
+
 ### Current FAQ dataset
 
 For current KB testing, the repo now includes a curated higher-quality FAQ set:
 
 - `cob_mock_kb_large/high_quality_faqs/high_quality_faqs.jsonl`
+
+## Documentation
+
+Helpful repo docs:
+
+- [KB Agent Walkthrough](/media/yasser/New Volume1/yasser/New_journey/customer-care-ai-agent/KB_AGENT_WALKTHROUGH.md)
+- [Action Agent Walkthrough](/media/yasser/New Volume1/yasser/New_journey/customer-care-ai-agent/ACTION_AGENT_WALKTHROUGH.md)
+- [Agent Interface Decision](/media/yasser/New Volume1/yasser/New_journey/customer-care-ai-agent/AGENT_INTERFACE_DECISION.md)
+- [OOP and SOLID Principles](/media/yasser/New Volume1/yasser/New_journey/customer-care-ai-agent/OOP_SOLID_PRINCIPLES.md)
 
 This set is intended to be a better retrieval baseline than the older large mixed synthetic FAQ source because it is:
 
@@ -289,6 +337,27 @@ KB_ANSWER_PROVIDER=gemini
 GEMINI_MIN_REQUEST_INTERVAL_SECONDS=1.0
 QDRANT_EMBEDDING_DIMENSION=1536
 ```
+
+Azure OpenAI is also supported for chat generation:
+
+```bash
+KB_ANSWER_PROVIDER=azure_openai
+ACTION_AGENT_PROVIDER=azure_openai
+ACTION_EXTRACTION_PROVIDER=azure_openai
+AZURE_OPENAI_API_KEY=your_azure_openai_api_key_here
+AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com
+AZURE_OPENAI_CHAT_DEPLOYMENT=your_chat_deployment_name
+AZURE_OPENAI_API_VERSION=2024-02-01
+```
+
+You can also use a structured `config.yml` instead of relying only on `.env`.
+Copy [config.yml.example](/media/yasser/New%20Volume1/yasser/New_journey/customer-care-ai-agent/config.yml.example) to `config.yml` and edit the values you want.
+
+Config loading precedence is:
+
+- real shell environment variables win
+- `.env` overrides `config.yml`
+- `config.yml` provides the base defaults
 
 ## Qdrant setup
 
@@ -414,6 +483,12 @@ Key environment variables:
 - `OPENAI_API_KEY`
 - `OPENAI_EMBEDDING_MODEL`
 - `OPENAI_CHAT_MODEL`
+- `AZURE_OPENAI_API_KEY`
+- `AZURE_OPENAI_ENDPOINT`
+- `AZURE_OPENAI_CHAT_DEPLOYMENT`
+- `AZURE_OPENAI_API_VERSION`
+- `ACTION_AGENT_PROVIDER`
+- `ACTION_EXTRACTION_PROVIDER`
 
 Important:
 - retrieval quality depends on using the same embedding provider for both ingestion and query time
@@ -425,6 +500,23 @@ Important:
 ```text
 You: What does credentialing include?
 Bot: Credentialing includes gathering provider information, preparing payer enrollment paperwork, tracking submissions, following up with payers, and maintaining provider records when demographic or licensing details change.
+```
+
+Action-flow example:
+
+```text
+You: i need to book a meeting
+Bot: Which service would you like to book?
+You: website
+Bot: Please provide the date you would like to schedule your appointment for Digital Marketing and Website Services.
+You: thursday
+Bot: For Digital Marketing and Website Services on Next Thursday, the available times are 09:00 AM, 10:30 AM, and 04:00 PM. Which time would you like?
+You: 10 30
+Bot: Great, I have your appointment for Digital Marketing and Website Services on Next Thursday at 10:30 AM. Could you please provide your name?
+You: yasser khira
+Bot: Thanks, Yasser Khira. Could you please provide your email address to complete the booking?
+You: yasserkhira@gmail.com
+Bot: Please confirm your appointment for Digital Marketing and Website Services on Next Thursday at 10:30 AM under the name Yasser Khira with the email yasserkhira@gmail.com. Should I proceed to book it?
 ```
 
 ## Documentation

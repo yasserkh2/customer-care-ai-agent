@@ -14,6 +14,19 @@ class ChatState(TypedDict, total=False):
     frustration_flag: bool
     escalation_reason: str | None
     retrieved_context: list[str]
+    active_action: str | None
+    appointment_slots: dict[str, str]
+    missing_slots: list[str]
+    available_dates: list[str]
+    suggested_date: str | None
+    date_confirmed: bool
+    available_slots: list[str]
+    suggested_time: str | None
+    time_confirmed: bool
+    awaiting_confirmation: bool
+    booking_confirmation_id: str | None
+    booking_result: dict[str, Any] | None
+    booking_error: str | None
     final_response: str
 
 
@@ -28,5 +41,18 @@ def create_initial_state(user_query: str) -> ChatState:
         "frustration_flag": False,
         "escalation_reason": None,
         "retrieved_context": [],
+        "active_action": None,
+        "appointment_slots": {},
+        "missing_slots": [],
+        "available_dates": [],
+        "suggested_date": None,
+        "date_confirmed": False,
+        "available_slots": [],
+        "suggested_time": None,
+        "time_confirmed": False,
+        "awaiting_confirmation": False,
+        "booking_confirmation_id": None,
+        "booking_result": None,
+        "booking_error": None,
         "final_response": "",
     }

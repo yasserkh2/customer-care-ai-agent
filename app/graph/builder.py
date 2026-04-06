@@ -7,7 +7,7 @@ from app.graph.nodes.human_escalation import HumanEscalationNode
 from app.graph.nodes.ingest_query import IngestQueryNode
 from app.graph.nodes.kb_answer import KnowledgeBaseAnswerNode
 from app.graph.nodes.response import ResponseNode
-from app.graph.router import GraphRouter
+from app.graph.router import ActiveFlowRouter, GraphRouter
 from app.graph.state import ChatState
 
 
@@ -35,7 +35,14 @@ def build_graph(dependencies: GraphDependencies | None = None):
     graph.add_node("response", ResponseNode(resolved_dependencies.history_manager))
 
     graph.set_entry_point("ingest_query")
-    graph.add_edge("ingest_query", "classify_intent")
+    graph.add_conditional_edges(
+        "ingest_query",
+        ActiveFlowRouter(),
+        {
+            "classify_intent": "classify_intent",
+            "action_request": "action_request",
+        },
+    )
     graph.add_conditional_edges(
         "classify_intent",
         GraphRouter(resolved_dependencies.intent_router),

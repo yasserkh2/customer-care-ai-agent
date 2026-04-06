@@ -33,6 +33,7 @@ class KeywordIntentClassifier:
     def classify(self, state: ChatState) -> IntentDecision:
         query = state.get("user_query", "")
         normalized_query = query.lower()
+        active_action = state.get("active_action")
         frustration_flag = self._contains_any(
             normalized_query, self._keyword_catalog.frustration_keywords
         )
@@ -47,6 +48,13 @@ class KeywordIntentClassifier:
                 escalation_reason=(
                     "User requested help from a human or showed frustration."
                 ),
+            )
+
+        if active_action == "appointment_scheduling":
+            return IntentDecision(
+                intent="action_request",
+                confidence=0.95,
+                frustration_flag=frustration_flag,
             )
 
         if self._contains_any(normalized_query, self._keyword_catalog.action_keywords):

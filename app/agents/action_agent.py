@@ -10,6 +10,4 @@ class ActionRequestAgent(StateAgent):
         self._action_request_service = action_request_service
 
     def execute(self, state: ChatState) -> ChatState:
-        return {
-            "final_response": self._action_request_service.build_response(state),
-        }
+        return self._action_request_service.handle_turn(state)

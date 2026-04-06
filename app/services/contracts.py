@@ -36,7 +36,7 @@ class KnowledgeBaseService(Protocol):
 
 
 class ActionRequestService(Protocol):
-    def build_response(self, state: ChatState) -> str:
+    def handle_turn(self, state: ChatState) -> ChatState:
         ...
 
 
