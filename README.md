@@ -7,12 +7,13 @@ A LangGraph-based customer care chatbot starter project with a clean OOP structu
 The project is set up as a runnable foundation for a customer support chatbot. It currently includes:
 
 - Query ingestion
-- Intent classification
+- LLM-based intent classification with deterministic fallback
 - Graph-based routing
 - Knowledge-base answer path with retrieval plus grounded RAG answering
 - Multi-turn appointment action agent with mock external integration
+- Mid-conversation human escalation routing with sticky handoff state
 - YAML-based runtime config through `config.yml` with `.env` overrides
-- Azure OpenAI support for KB answers, action replies, and action extraction
+- OpenAI, Gemini, and Azure OpenAI support for KB answers, action replies, action extraction, and intent classification
 - Human escalation response path
 - Shared chat state and conversation history handling
 - Session memory in the CLI chat loop
@@ -34,7 +35,8 @@ The chatbot flow is:
    - `kb_answer`
    - `action_request`
    - `human_escalation`
-4. `response`
+4. `evaluate_escalation` after `kb_answer` and `action_request`
+5. `human_escalation` or `response`
 
 The project separates responsibilities clearly:
 
@@ -65,6 +67,7 @@ app/
       classify_intent.py
       kb_answer.py
       action_request.py
+      evaluate_escalation.py
       human_escalation.py
       response.py
   agents/
@@ -79,6 +82,8 @@ app/
     __init__.py
     action_extraction.py
     action_planning.py
+    intent_factory.py
+    intent_prompts.py
     contracts.py
     factory.py
     http.py
@@ -203,11 +208,22 @@ This keeps parsing, chunking, and embedding preparation independent from the cho
 
 ### Intent classification
 
-The current classifier is keyword-based and supports:
+The default classifier is now LLM-based and supports:
 
 - `kb_query`
 - `action_request`
 - `human_escalation`
+
+Current behavior:
+
+- the classifier uses a dedicated intent-classification prompt
+- it considers the latest user message, recent conversation history, active action state, and current failure count
+- it returns structured JSON for:
+  - `intent`
+  - `confidence`
+  - `frustration_flag`
+  - `escalation_reason`
+- if the configured LLM provider is unavailable or misconfigured, the app falls back to a deterministic keyword classifier so the chat still works
 
 ### Routing
 
@@ -215,7 +231,13 @@ The router sends the conversation to:
 
 - `kb_answer` for knowledge-base-style questions
 - `action_request` for appointment-related requests
-- `human_escalation` for human help requests or frustration signals
+- `human_escalation` for human help requests, frustration signals, or handoff-pending sessions
+
+After `kb_answer` and `action_request`, the graph now runs a post-turn escalation evaluation step that can:
+
+- increment repeated-failure state
+- trigger escalation immediately when a turn already signals handoff
+- route the current turn into `human_escalation` before the normal response path finishes
 
 ### Response generation
 
@@ -223,7 +245,28 @@ The knowledge-base path now retrieves FAQ context from Qdrant and uses a grounde
 
 The action request path is now a real multi-turn appointment agent. It collects booking fields across turns, validates service/date/time/name/email state in code, asks for one missing field at a time, lets the LLM phrase the reply naturally, asks for confirmation only when the booking is complete, and then submits a mock booking request.
 
-The escalation path returns a human handoff message with a reason when available.
+The escalation path returns a human handoff message with a reason when available, clears active automated appointment state, and keeps the session in handoff mode through `handoff_pending`.
+
+### Human escalation flow
+
+The escalation flow now works across the conversation, not only on a single turn.
+
+Current behavior:
+
+- explicit escalation requests can route directly to `human_escalation`
+- KB and action turns report `turn_outcome` and optional failure metadata
+- unresolved turns can increase `failure_count`
+- repeated failure triggers escalation when the threshold is reached
+- once handoff starts, the graph keeps routing the session to `human_escalation`
+
+Key state fields used for this flow now include:
+
+- `handoff_pending`
+- `failure_count`
+- `turn_outcome`
+- `turn_failure_reason`
+- `frustration_flag`
+- `escalation_reason`
 
 ### Vector DB setup
 
@@ -334,6 +377,7 @@ GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 GEMINI_CHAT_MODEL=gemini-2.5-flash
 KB_ANSWER_PROVIDER=gemini
+INTENT_CLASSIFIER_PROVIDER=gemini
 GEMINI_MIN_REQUEST_INTERVAL_SECONDS=1.0
 QDRANT_EMBEDDING_DIMENSION=1536
 ```
@@ -344,6 +388,7 @@ Azure OpenAI is also supported for chat generation:
 KB_ANSWER_PROVIDER=azure_openai
 ACTION_AGENT_PROVIDER=azure_openai
 ACTION_EXTRACTION_PROVIDER=azure_openai
+INTENT_CLASSIFIER_PROVIDER=azure_openai
 AZURE_OPENAI_API_KEY=your_azure_openai_api_key_here
 AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com
 AZURE_OPENAI_CHAT_DEPLOYMENT=your_chat_deployment_name
@@ -470,6 +515,7 @@ Key environment variables:
 
 - `EMBEDDING_PROVIDER`
 - `KB_ANSWER_PROVIDER`
+- `INTENT_CLASSIFIER_PROVIDER`
 - `FAQS_JSONL_PATH`
 - `FAQ_PIPELINE_LIMIT`
 - `FAQ_PIPELINE_BATCH_SIZE`
@@ -489,6 +535,7 @@ Key environment variables:
 - `AZURE_OPENAI_API_VERSION`
 - `ACTION_AGENT_PROVIDER`
 - `ACTION_EXTRACTION_PROVIDER`
+- `INTENT_CLASSIFIER_SYSTEM_PROMPT`
 
 Important:
 - retrieval quality depends on using the same embedding provider for both ingestion and query time
@@ -519,6 +566,13 @@ You: yasserkhira@gmail.com
 Bot: Please confirm your appointment for Digital Marketing and Website Services on Next Thursday at 10:30 AM under the name Yasser Khira with the email yasserkhira@gmail.com. Should I proceed to book it?
 ```
 
+Escalation example:
+
+```text
+You: i need to escilate
+Bot: I need to transfer this conversation to a human agent. A human agent will follow up with you. Reason: User requested help from a human or showed frustration.
+```
+
 ## Documentation
 
 - `README.md`: project overview and usage
@@ -540,8 +594,6 @@ Bot: Please confirm your appointment for Digital Marketing and Website Services 
 - Add retrieval-quality checks for Gemini/OpenAI experiment sets
 - Expand ingestion beyond FAQs into documents and structured data
 - Add entity extraction for appointment requests
-- Add slot filling and confirmation flow
-- Add a mock or real booking integration
-- Add failure counting and clearer escalation policies
+- Expand the LLM intent classifier prompt and evaluation rules for richer escalation decisions
 - Add automated tests for nodes, services, and routing
 - Add an API or UI layer
