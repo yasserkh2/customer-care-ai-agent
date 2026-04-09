@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
+from time import perf_counter
 
 import streamlit as st
 
@@ -180,6 +181,9 @@ def _render_sidebar() -> None:
 def _render_message(message: dict[str, object]) -> None:
     with st.chat_message(str(message["role"])):
         st.markdown(str(message["content"]))
+        latency_caption = str(message.get("latency_caption", "")).strip()
+        if latency_caption:
+            st.caption(latency_caption)
 
         retrieval_query = str(message.get("retrieval_query", "")).strip()
         if retrieval_query:
@@ -209,7 +213,13 @@ def _render_message(message: dict[str, object]) -> None:
                     st.code(str(item), language="text")
 
 
-def _run_turn(user_query: str) -> dict[str, object]:
+def _stream_response_text(text: str):
+    for token in text.split(" "):
+        if token:
+            yield f"{token} "
+
+
+def _run_turn(user_query: str, progress_placeholder=None) -> dict[str, object]:
     trace_handler = st.session_state.trace_handler
     trace_handler.reset()
     graph = _get_graph()
@@ -219,15 +229,26 @@ def _run_turn(user_query: str) -> dict[str, object]:
         truncate_text(user_query, 120),
         len(current_state.get("history", [])),
     )
+    working_state = {
+        **current_state,
+        "user_query": user_query,
+        "final_response": "",
+        "retrieved_context": [],
+    }
     try:
-        next_state = graph.invoke(
-            {
-                **current_state,
-                "user_query": user_query,
-                "final_response": "",
-                "retrieved_context": [],
-            }
-        )
+        invoke_start = perf_counter()
+        if progress_placeholder is not None:
+            progress_placeholder.caption("Running: ingest_query")
+        for update in graph.stream(working_state, stream_mode="updates"):
+            if not isinstance(update, dict):
+                continue
+            for node_name, node_update in update.items():
+                if isinstance(node_update, dict):
+                    working_state.update(node_update)
+                if progress_placeholder is not None:
+                    progress_placeholder.caption(f"Running: {node_name}")
+        backend_invoke_ms = (perf_counter() - invoke_start) * 1000
+        next_state = working_state
     except Exception as exc:
         logger.exception("ui turn failed: %s", exc)
         st.session_state.turn_logs = trace_handler.snapshot()
@@ -242,6 +263,7 @@ def _run_turn(user_query: str) -> dict[str, object]:
     return {
         "content": next_state.get("final_response", "").strip()
         or "I wasn't able to generate a response.",
+        "backend_invoke_ms": backend_invoke_ms,
         "retrieval_query": str(next_state.get("retrieval_query", "")).strip(),
         "retrieved_context": list(next_state.get("retrieved_context", [])),
         "turn_logs": turn_logs,
@@ -275,20 +297,35 @@ def main() -> None:
         st.markdown(user_query)
 
     with st.chat_message("assistant"):
-        with st.spinner("Routing request and running graph nodes..."):
-            try:
-                assistant_message = _run_turn(user_query)
-            except Exception:
-                assistant_message = {
-                    "content": (
-                        "The backend hit an error while processing this turn. "
-                        "Check the Backend Trace panel for details."
-                    ),
-                    "retrieval_query": "",
-                    "retrieved_context": [],
-                    "turn_logs": st.session_state.turn_logs,
-                }
-        st.markdown(str(assistant_message["content"]))
+        turn_start = perf_counter()
+        progress_placeholder = st.empty()
+        response_placeholder = st.empty()
+        try:
+            assistant_message = _run_turn(
+                user_query,
+                progress_placeholder=progress_placeholder,
+            )
+        except Exception:
+            assistant_message = {
+                "content": (
+                    "The backend hit an error while processing this turn. "
+                    "Check the Backend Trace panel for details."
+                ),
+                "backend_invoke_ms": 0.0,
+                "retrieval_query": "",
+                "retrieved_context": [],
+                "turn_logs": st.session_state.turn_logs,
+            }
+        progress_placeholder.empty()
+        ui_turn_ms = (perf_counter() - turn_start) * 1000
+        latency_caption = (
+            f"Latency: backend={float(assistant_message.get('backend_invoke_ms', 0.0)):.0f}ms, "
+            f"ui_total={ui_turn_ms:.0f}ms"
+        )
+        response_placeholder.write_stream(
+            _stream_response_text(str(assistant_message["content"]))
+        )
+        st.caption(latency_caption)
 
         retrieval_query = str(assistant_message.get("retrieval_query", "")).strip()
         if retrieval_query:
@@ -321,6 +358,7 @@ def main() -> None:
         {
             "role": "assistant",
             "content": str(assistant_message["content"]),
+            "latency_caption": latency_caption,
             "retrieval_query": str(assistant_message.get("retrieval_query", "")),
             "retrieved_context": list(assistant_message.get("retrieved_context", [])),
             "turn_logs": list(assistant_message.get("turn_logs", [])),
