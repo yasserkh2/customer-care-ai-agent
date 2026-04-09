@@ -39,6 +39,19 @@ class ServiceResultRouterTests(unittest.TestCase):
 
         self.assertEqual(route, "evaluate_escalation")
 
+    def test_routes_resolved_turn_directly_to_response(self) -> None:
+        router = ServiceResultRouter()
+
+        route = router(
+            {
+                "handoff_pending": False,
+                "turn_outcome": "resolved",
+                "frustration_flag": False,
+            }
+        )
+
+        self.assertEqual(route, "response")
+
 
 class PostTurnRouterTests(unittest.TestCase):
     def test_routes_evaluator_result_to_human_when_handoff_is_pending(self) -> None:

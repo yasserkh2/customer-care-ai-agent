@@ -70,6 +70,7 @@ def build_graph(dependencies: GraphDependencies | None = None):
         {
             "human_escalation": "human_escalation",
             "evaluate_escalation": "evaluate_escalation",
+            "response": "response",
         },
     )
     graph.add_conditional_edges(
@@ -78,6 +79,7 @@ def build_graph(dependencies: GraphDependencies | None = None):
         {
             "human_escalation": "human_escalation",
             "evaluate_escalation": "evaluate_escalation",
+            "response": "response",
         },
     )
     graph.add_conditional_edges(

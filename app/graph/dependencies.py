@@ -27,7 +27,6 @@ from app.services.escalation import PostTurnEscalationEvaluator
 from app.services.history import DefaultConversationHistoryManager
 from app.services.intent import LlmIntentClassifier
 from app.services.knowledge_base import RetrievalKnowledgeBaseService
-from app.services.query_rewriting import DefaultRetrievalQueryRewriter
 from app.services.responses import (
     GeneralConversationService as DefaultGeneralConversationService,
     HumanEscalationService,
@@ -53,9 +52,7 @@ class GraphDependencies:
     @classmethod
     def default(cls) -> "GraphDependencies":
         history_manager = DefaultConversationHistoryManager()
-        knowledge_base_service = RetrievalKnowledgeBaseService(
-            query_rewriter=DefaultRetrievalQueryRewriter()
-        )
+        knowledge_base_service = RetrievalKnowledgeBaseService()
         action_request_service = AppointmentActionService(
             extractor=AppointmentExtractorFactory().build(),
             booking_api_client=LocalMockBookingApiClient(),

@@ -1,7 +1,6 @@
 from app.graph.state import ChatState
 from app.observability import get_logger, summarize_state, summarize_update
 from app.services.contracts import EscalationEvaluator
-from app.services.escalation import PostTurnEscalationEvaluator
 
 logger = get_logger("graph.nodes.evaluate_escalation")
 
@@ -15,10 +14,3 @@ class EvaluateEscalationNode:
         update = self._evaluator.evaluate(state)
         logger.info("evaluate_escalation completed: %s", summarize_update(update))
         return update
-
-
-_default_node = EvaluateEscalationNode(PostTurnEscalationEvaluator())
-
-
-def evaluate_escalation(state: ChatState) -> ChatState:
-    return _default_node(state)

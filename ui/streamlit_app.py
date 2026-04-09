@@ -81,8 +81,10 @@ def _ensure_session_state() -> None:
             {
                 "role": "assistant",
                 "content": (
-                    "Hello, I'm your customer care demo assistant. "
-                    "Ask a question or start an appointment request."
+                    "Hello, I am COB Company's customer care assistant. "
+                    "I can help with company and service questions, guide consultation booking, "
+                    "or connect you with a human agent. "
+                    "What would you like to start with?"
                 ),
                 "retrieval_query": "",
                 "retrieved_context": [],
@@ -110,7 +112,8 @@ def _render_sidebar() -> None:
                 {
                     "role": "assistant",
                     "content": (
-                        "Chat reset. How can I help you today?"
+                        "Chat reset. I can help with COB Company services, booking, "
+                        "or human support. What would you like to do next?"
                     ),
                     "retrieval_query": "",
                     "retrieved_context": [],
@@ -251,6 +254,9 @@ def main() -> None:
         page_icon="💬",
         layout="centered",
     )
+    # Warm up the backend graph once on page load so the first user turn
+    # does not pay graph initialization overhead.
+    _get_graph()
     _ensure_session_state()
 
     st.title("Customer Care AI Chat")

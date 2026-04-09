@@ -1,70 +1,54 @@
 from __future__ import annotations
 
-import re
+from time import perf_counter
+
+from app.llm.contracts import RetrievalQueryGenerator
+from app.llm.retrieval_query_factory import RetrievalQueryGeneratorFactory
+from app.observability import get_logger, truncate_text
+
+logger = get_logger("services.query_rewriting")
 
 
-_SERVICE_NAMES = (
-    "Credentialing and Provider Maintenance",
-    "Authorizations and Benefits Verification",
-    "Medical Billing and Denial Management",
-    "Medical Auditing",
-    "Customer Care",
-    "Digital Marketing and Website Services",
-    "Financial Management",
-    "Communication Services",
-)
-_FRAGMENT_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (
-        re.compile(r"^what\s+this\s+service\s+usually\s+includes\??$", re.IGNORECASE),
-        "What does {service} usually include?",
-    ),
-    (
-        re.compile(r"^what\s+does\s+this\s+service\s+usually\s+include\??$", re.IGNORECASE),
-        "What does {service} usually include?",
-    ),
-    (
-        re.compile(r"^what\s+should\s+we\s+prepare\??$", re.IGNORECASE),
-        "What should we prepare before discussing {service}?",
-    ),
-    (
-        re.compile(r"^what\s+about\s+intake\??$", re.IGNORECASE),
-        "What information should we collect during intake for {service}?",
-    ),
-    (
-        re.compile(r"^when\s+should\s+that\s+be\s+escalated\??$", re.IGNORECASE),
-        "When should a conversation about {service} be escalated to a human?",
-    ),
-    (
-        re.compile(r"^when\s+should\s+this\s+be\s+escalated\??$", re.IGNORECASE),
-        "When should a conversation about {service} be escalated to a human?",
-    ),
-)
+class LlmRetrievalQueryRewriter:
+    def __init__(
+        self,
+        generator: RetrievalQueryGenerator | None = None,
+    ) -> None:
+        self._generator = generator
 
-
-class DefaultRetrievalQueryRewriter:
     def rewrite(self, query: str, history: list[str]) -> str:
         normalized_query = query.strip()
         if not normalized_query:
             return normalized_query
 
-        service_name = self._find_recent_service_name(history=history)
-        if not service_name:
-            return normalized_query
+        generator = self._get_generator()
+        if generator is None:
+            raise RuntimeError("LLM retrieval query generator is unavailable.")
 
-        for pattern, template in _FRAGMENT_PATTERNS:
-            if pattern.match(normalized_query):
-                return template.format(service=service_name)
+        rewrite_start = perf_counter()
+        rewritten = generator.generate_query(
+            user_query=normalized_query,
+            conversation_history=history,
+        ).strip()
+        rewrite_ms = (perf_counter() - rewrite_start) * 1000
 
-        return normalized_query
+        if not rewritten:
+            raise RuntimeError("LLM retrieval query generator returned an empty query.")
 
-    def _find_recent_service_name(self, history: list[str]) -> str | None:
-        recent_messages = reversed(history[-6:])
-        for message in recent_messages:
-            message_text = message.strip()
-            if not message_text:
-                continue
-            message_lower = message_text.lower()
-            for service_name in _SERVICE_NAMES:
-                if service_name.lower() in message_lower:
-                    return service_name
-        return None
+        logger.info(
+            "llm retrieval query generated: original='%s' rewritten='%s' latency_ms=%.1f",
+            truncate_text(normalized_query, 120),
+            truncate_text(rewritten, 120),
+            rewrite_ms,
+        )
+        return rewritten
+
+    def _get_generator(self) -> RetrievalQueryGenerator | None:
+        if self._generator is not None:
+            return self._generator
+        try:
+            self._generator = RetrievalQueryGeneratorFactory().build()
+        except Exception as exc:
+            logger.warning("retrieval query generator unavailable: %s", exc)
+            self._generator = None
+        return self._generator

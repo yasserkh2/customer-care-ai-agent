@@ -1,7 +1,6 @@
 from app.graph.state import ChatState
 from app.observability import get_logger, summarize_state, summarize_update
 from app.services.contracts import ConversationHistoryManager
-from app.services.history import DefaultConversationHistoryManager
 
 logger = get_logger("graph.nodes.response")
 
@@ -27,10 +26,3 @@ class ResponseNode:
         }
         logger.info("response completed: %s", summarize_update(update))
         return update
-
-
-_default_node = ResponseNode(DefaultConversationHistoryManager())
-
-
-def response(state: ChatState) -> ChatState:
-    return _default_node(state)

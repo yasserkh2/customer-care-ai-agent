@@ -1,7 +1,6 @@
 from app.observability import get_logger, summarize_update
 from app.graph.state import ChatState
 from app.services.contracts import ConversationHistoryManager
-from app.services.history import DefaultConversationHistoryManager
 
 logger = get_logger("graph.nodes.ingest_query")
 
@@ -21,10 +20,3 @@ class IngestQueryNode:
         }
         logger.info("ingest_query completed: %s", summarize_update(update))
         return update
-
-
-_default_node = IngestQueryNode(DefaultConversationHistoryManager())
-
-
-def ingest_query(state: ChatState) -> ChatState:
-    return _default_node(state)
