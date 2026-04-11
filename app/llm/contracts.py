@@ -21,6 +21,22 @@ class ActionReplyGenerator(Protocol):
         ...
 
 
+class EscalationReplyGenerator(Protocol):
+    def generate_reply(
+        self,
+        *,
+        user_query: str,
+        escalation_reason: str,
+        conversation_history: list[str],
+        escalation_case_id: str | None,
+        contact_name: str | None,
+        contact_email: str | None,
+        contact_phone: str | None,
+        requires_contact: bool,
+    ) -> str:
+        ...
+
+
 class IntentDecisionGenerator(Protocol):
     def classify_intent(
         self,

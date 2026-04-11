@@ -49,9 +49,9 @@ class EscalationContactFlowTests(unittest.TestCase):
         self.assertEqual(update["escalation_contact_email"], "yasser@example.com")
         self.assertEqual(update["escalation_case_id"], "esc_test_uuid_123")
         self.assertEqual(len(self.saved_states), 1)
-        self.assertIn("Thanks Yasser.", update["final_response"])
+        self.assertIn("Thanks, Yasser.", update["final_response"])
         self.assertIn("esc_test_uuid_123", update["final_response"])
-        self.assertIn("We will contact you at yasser@example.com shortly.", update["final_response"])
+        self.assertIn("They'll reach out at yasser@example.com shortly.", update["final_response"])
 
     def test_handoff_uses_existing_llm_extracted_contact(self) -> None:
         update = self._agent.execute(
@@ -66,7 +66,7 @@ class EscalationContactFlowTests(unittest.TestCase):
         self.assertEqual(update["escalation_contact_name"], "Yasser Khira")
         self.assertEqual(update["escalation_contact_email"], "yasser@company.com")
         self.assertEqual(update["escalation_case_id"], "esc_test_uuid_123")
-        self.assertIn("We will contact you at yasser@company.com shortly.", update["final_response"])
+        self.assertIn("They'll reach out at yasser@company.com shortly.", update["final_response"])
 
     def test_handoff_with_existing_case_id_does_not_persist_again(self) -> None:
         update = self._agent.execute(
@@ -81,6 +81,34 @@ class EscalationContactFlowTests(unittest.TestCase):
 
         self.assertEqual(update["escalation_case_id"], "esc_existing_case")
         self.assertEqual(len(self.saved_states), 0)
+
+    def test_handoff_recovers_email_from_user_query_when_llm_email_is_truncated(self) -> None:
+        update = self._agent.execute(
+            {
+                "user_query": "Yasser Khira yasserkhira@gmail.com",
+                "escalation_reason": "User requested human support.",
+                "escalation_contact_name": "Yasser Khira",
+                "escalation_contact_email": "yasserkhira@gmail.c",
+            }
+        )
+
+        self.assertEqual(update["escalation_contact_email"], "yasserkhira@gmail.com")
+        self.assertEqual(update["escalation_case_id"], "esc_test_uuid_123")
+        self.assertIn("They'll reach out at yasserkhira@gmail.com shortly.", update["final_response"])
+
+    def test_handoff_reprompts_when_contact_channel_is_invalid(self) -> None:
+        update = self._agent.execute(
+            {
+                "user_query": "Yasser Khira yasserkhira@gmail.c",
+                "escalation_reason": "User requested human support.",
+                "escalation_contact_name": "Yasser Khira",
+                "escalation_contact_email": "yasserkhira@gmail.c",
+            }
+        )
+
+        self.assertIsNone(update["escalation_contact_email"])
+        self.assertIsNone(update["escalation_case_id"])
+        self.assertIn("valid phone number or email", update["final_response"])
 
 
 if __name__ == "__main__":

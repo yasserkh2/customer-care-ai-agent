@@ -6,11 +6,17 @@ from app.llm.action_extraction import (
     build_action_extraction_prompt,
 )
 from app.llm.action_factory import ActionReplyGeneratorFactory
+from app.llm.escalation_factory import EscalationReplyGeneratorFactory
 from app.llm.action_prompts import (
     DEFAULT_ACTION_AGENT_SYSTEM_PROMPT,
     build_action_agent_user_prompt,
 )
-from app.llm.contracts import ActionReplyGenerator, AnswerGenerator, IntentDecisionGenerator
+from app.llm.contracts import (
+    ActionReplyGenerator,
+    AnswerGenerator,
+    EscalationReplyGenerator,
+    IntentDecisionGenerator,
+)
 from app.llm.factory import KbAnswerGeneratorFactory
 from app.llm.intent_factory import IntentDecisionGeneratorFactory
 from app.llm.intent_prompts import (
@@ -20,6 +26,7 @@ from app.llm.intent_prompts import (
 from app.llm.providers import (
     AzureOpenAIActionReplyGenerator,
     AzureOpenAIAppointmentExtractor,
+    AzureOpenAIEscalationReplyGenerator,
     AzureOpenAIIntentDecisionGenerator,
     AzureOpenAIKbAnswerGenerator,
 )
@@ -37,10 +44,13 @@ __all__ = [
     "AnswerGenerator",
     "ActionReplyGenerator",
     "IntentDecisionGenerator",
+    "EscalationReplyGenerator",
     "ActionReplyGeneratorFactory",
+    "EscalationReplyGeneratorFactory",
     "AppointmentExtractorFactory",
     "AzureOpenAIActionReplyGenerator",
     "AzureOpenAIAppointmentExtractor",
+    "AzureOpenAIEscalationReplyGenerator",
     "AzureOpenAIIntentDecisionGenerator",
     "AzureOpenAIKbAnswerGenerator",
     "DEFAULT_ACTION_AGENT_SYSTEM_PROMPT",

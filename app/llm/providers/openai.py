@@ -9,6 +9,10 @@ from app.llm.action_prompts import (
     DEFAULT_ACTION_AGENT_SYSTEM_PROMPT,
     build_action_agent_user_prompt,
 )
+from app.llm.escalation_prompts import (
+    DEFAULT_ESCALATION_AGENT_SYSTEM_PROMPT,
+    build_escalation_user_prompt,
+)
 from app.llm.intent_prompts import (
     DEFAULT_INTENT_CLASSIFIER_SYSTEM_PROMPT,
     build_intent_classifier_prompt,
@@ -154,6 +158,94 @@ class OpenAIActionReplyGenerator:
         content = message.get("content")
         if not isinstance(content, str) or not content.strip():
             raise RuntimeError("OpenAI action reply did not contain text content.")
+        return content.strip()
+
+
+class OpenAIEscalationReplyGenerator:
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        system_prompt: str = DEFAULT_ESCALATION_AGENT_SYSTEM_PROMPT,
+        base_url: str = "https://api.openai.com/v1/chat/completions",
+        timeout_seconds: int = 60,
+        max_output_tokens: int = 180,
+    ) -> None:
+        if not api_key.strip():
+            raise ValueError("OPENAI_API_KEY must not be empty.")
+        if not model.strip():
+            raise ValueError("OpenAI chat model must not be empty.")
+
+        self._api_key = api_key
+        self._model = model
+        self._system_prompt = system_prompt
+        self._base_url = base_url
+        self._timeout_seconds = timeout_seconds
+        self._max_output_tokens = max(1, int(max_output_tokens))
+
+    @classmethod
+    def from_env(cls) -> "OpenAIEscalationReplyGenerator":
+        return cls(
+            api_key=os.getenv("OPENAI_API_KEY", ""),
+            model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini"),
+            system_prompt=os.getenv(
+                "ESCALATION_AGENT_SYSTEM_PROMPT",
+                DEFAULT_ESCALATION_AGENT_SYSTEM_PROMPT,
+            ),
+            max_output_tokens=int(
+                os.getenv("ESCALATION_AGENT_MAX_OUTPUT_TOKENS", "180")
+            ),
+        )
+
+    def generate_reply(
+        self,
+        *,
+        user_query: str,
+        escalation_reason: str,
+        conversation_history: list[str],
+        escalation_case_id: str | None,
+        contact_name: str | None,
+        contact_email: str | None,
+        contact_phone: str | None,
+        requires_contact: bool,
+    ) -> str:
+        prompt = build_escalation_user_prompt(
+            user_query=user_query,
+            escalation_reason=escalation_reason,
+            conversation_history=conversation_history,
+            escalation_case_id=escalation_case_id,
+            contact_name=contact_name,
+            contact_email=contact_email,
+            contact_phone=contact_phone,
+            requires_contact=requires_contact,
+        )
+        payload = {
+            "model": self._model,
+            "temperature": 0.3,
+            "max_tokens": self._max_output_tokens,
+            "messages": [
+                {"role": "system", "content": self._system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+        }
+        response_payload = post_json(
+            url=self._base_url,
+            payload=payload,
+            headers={
+                "Authorization": f"Bearer {self._api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout_seconds=self._timeout_seconds,
+            provider_name="OpenAI escalation reply generation",
+        )
+        choices = response_payload.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise RuntimeError("OpenAI escalation reply did not contain choices.")
+
+        message = choices[0].get("message", {})
+        content = message.get("content")
+        if not isinstance(content, str) or not content.strip():
+            raise RuntimeError("OpenAI escalation reply did not contain text content.")
         return content.strip()
 
 

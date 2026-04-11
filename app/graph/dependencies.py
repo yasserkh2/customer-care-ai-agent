@@ -11,6 +11,7 @@ from app.agents import (
 )
 from app.llm.action_factory import ActionReplyGeneratorFactory
 from app.llm.action_extraction import AppointmentExtractorFactory
+from app.llm.escalation_factory import EscalationReplyGeneratorFactory
 from app.services.contracts import (
     ActionRequestService,
     ConversationHistoryManager,
@@ -59,7 +60,13 @@ class GraphDependencies:
             booking_api_client=LocalMockBookingApiClient(),
             response_generator=ActionReplyGeneratorFactory().build(),
         )
-        escalation_service = HumanEscalationService()
+        try:
+            escalation_reply_generator = EscalationReplyGeneratorFactory().build()
+        except Exception:
+            escalation_reply_generator = None
+        escalation_service = HumanEscalationService(
+            escalation_reply_generator=escalation_reply_generator
+        )
         general_conversation_service = DefaultGeneralConversationService()
         escalation_evaluator = PostTurnEscalationEvaluator()
         agent_factory = AgentFactory(

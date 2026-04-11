@@ -1,10 +1,53 @@
 from __future__ import annotations
 
 from app.graph.state import ChatState
+from app.llm.contracts import EscalationReplyGenerator
+from app.observability import get_logger
+
+logger = get_logger("services.responses")
 
 
 class HumanEscalationService:
+    def __init__(
+        self,
+        escalation_reply_generator: EscalationReplyGenerator | None = None,
+    ) -> None:
+        self._escalation_reply_generator = escalation_reply_generator
+
     def build_response(self, state: ChatState) -> str:
+        fallback_message = self._build_template_response(state)
+        generator = self._escalation_reply_generator
+        if generator is None:
+            return fallback_message
+
+        reason = str(state.get("escalation_reason") or "This request needs human support.").strip()
+        name = str(state.get("escalation_contact_name") or "").strip() or None
+        email = str(state.get("escalation_contact_email") or "").strip() or None
+        phone = str(state.get("escalation_contact_phone") or "").strip() or None
+        escalation_case_id = str(state.get("escalation_case_id") or "").strip() or None
+        user_query = str(state.get("user_query") or "").strip()
+        history = list(state.get("history", []))
+        requires_contact = not bool(email or phone)
+        try:
+            llm_response = generator.generate_reply(
+                user_query=user_query,
+                escalation_reason=reason,
+                conversation_history=history,
+                escalation_case_id=escalation_case_id,
+                contact_name=name,
+                contact_email=email,
+                contact_phone=phone,
+                requires_contact=requires_contact,
+            )
+            if llm_response.strip():
+                return llm_response.strip()
+        except Exception as exc:
+            logger.warning("escalation reply generation failed, using template fallback: %s", exc)
+
+        return fallback_message
+
+    @staticmethod
+    def _build_template_response(state: ChatState) -> str:
         reason = state.get("escalation_reason") or "This request needs human support."
         name = str(state.get("escalation_contact_name") or "").strip()
         email = str(state.get("escalation_contact_email") or "").strip()
@@ -21,20 +64,21 @@ class HumanEscalationService:
                 contact_text = f"{contact_channels[0]} or {contact_channels[1]}"
             else:
                 contact_text = contact_channels[0]
-            thanks_prefix = f"Thanks {name}. " if name else "Thank you. "
+            thanks_prefix = f"Thanks, {name}. " if name else "Thank you. "
             case_suffix = (
                 f"Your escalation reference is {escalation_case_id}. "
                 if escalation_case_id
                 else ""
             )
-            if name:
-                return f"{base_message} {thanks_prefix}{case_suffix}We will contact you at {contact_text} shortly."
-            return f"{base_message} {thanks_prefix}{case_suffix}We will contact you at {contact_text} shortly."
+            return (
+                f"{base_message} {thanks_prefix}{case_suffix}"
+                f"I've shared this with our human team. They'll reach out at {contact_text} shortly."
+            )
 
         return (
             f"{base_message} "
-            "Please share your name and either your phone number or email, "
-            "and our human team will contact you."
+            "Please share your name and either a valid phone number or email, "
+            "and our human team will follow up with you."
         )
 
 

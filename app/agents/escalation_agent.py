@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import re
 
 from app.agents.contracts import StateAgent
 from app.graph.state import ChatState
@@ -11,6 +12,12 @@ from app.services.contracts import EscalationService
 logger = get_logger("agents.escalation")
 
 EscalationRecorder = Callable[[ChatState], str]
+
+_EMAIL_PATTERN = re.compile(r"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$", re.IGNORECASE)
+_EMAIL_IN_TEXT_PATTERN = re.compile(
+    r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE
+)
+_PHONE_IN_TEXT_PATTERN = re.compile(r"(?:\+?\d[\d().\-\s]{6,}\d)")
 
 
 def _default_escalation_recorder(state: ChatState) -> str:
@@ -73,11 +80,20 @@ class HumanEscalationAgent(StateAgent):
         name = str(state.get("escalation_contact_name") or "").strip()
         email = str(state.get("escalation_contact_email") or "").strip()
         phone = str(state.get("escalation_contact_phone") or "").strip()
+        user_query = str(state.get("user_query") or "").strip()
+
+        if not HumanEscalationAgent._is_valid_email(email):
+            extracted_email = HumanEscalationAgent._extract_email_from_text(user_query)
+            email = extracted_email or ""
+
+        if not HumanEscalationAgent._is_valid_phone(phone):
+            extracted_phone = HumanEscalationAgent._extract_phone_from_text(user_query)
+            phone = extracted_phone or ""
 
         return {
             "escalation_contact_name": name or None,
-            "escalation_contact_email": email or None,
-            "escalation_contact_phone": phone or None,
+            "escalation_contact_email": email if HumanEscalationAgent._is_valid_email(email) else None,
+            "escalation_contact_phone": phone if HumanEscalationAgent._is_valid_phone(phone) else None,
         }
 
     @staticmethod
@@ -86,3 +102,31 @@ class HumanEscalationAgent(StateAgent):
             str(state.get("escalation_contact_email") or "").strip()
             or str(state.get("escalation_contact_phone") or "").strip()
         )
+
+    @staticmethod
+    def _is_valid_email(value: str) -> bool:
+        candidate = value.strip()
+        return bool(candidate and _EMAIL_PATTERN.fullmatch(candidate))
+
+    @staticmethod
+    def _is_valid_phone(value: str) -> bool:
+        candidate = value.strip()
+        if not candidate:
+            return False
+        digits = [char for char in candidate if char.isdigit()]
+        return len(digits) >= 7
+
+    @staticmethod
+    def _extract_email_from_text(message: str) -> str | None:
+        match = _EMAIL_IN_TEXT_PATTERN.search(message)
+        if match is None:
+            return None
+        return match.group(0).strip()
+
+    @staticmethod
+    def _extract_phone_from_text(message: str) -> str | None:
+        match = _PHONE_IN_TEXT_PATTERN.search(message)
+        if match is None:
+            return None
+        candidate = match.group(0).strip()
+        return candidate if HumanEscalationAgent._is_valid_phone(candidate) else None
