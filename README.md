@@ -339,6 +339,8 @@ Current providers:
 - `openai` for OpenAI embeddings
 - `local` for deterministic pipeline-only testing
 
+Current project default for retrieval is Gemini embeddings (`EMBEDDING_PROVIDER=gemini` with `GEMINI_EMBEDDING_MODEL=gemini-embedding-001`).
+
 The vectorization pipeline embeds stored FAQ chunks as documents, while retrieval embeds incoming user questions as queries. This matters for providers such as Gemini that support retrieval-specific task types.
 
 ### Action agent
@@ -392,6 +394,122 @@ For current KB testing, the repo now includes a curated higher-quality FAQ set:
 
 - `cob_mock_kb_large/high_quality_faqs/high_quality_faqs.jsonl`
 
+## Full run instructions (start here)
+
+Use this section if you want one complete path from setup to a working chatbot session.
+
+### 1) Prerequisites
+
+- Python `3.11+`
+- `pip`
+- One provider API key for LLM + embeddings (`gemini`, `openai`, or `azure_openai`)
+
+### 2) Install dependencies
+
+From the repository root:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -e .
+```
+
+### 3) Configure runtime settings
+
+Create local config files:
+
+```bash
+cp .env.example .env
+cp config.yml.example config.yml
+```
+
+Set your provider values in `.env` (example for Gemini):
+
+```bash
+EMBEDDING_PROVIDER=gemini
+KB_ANSWER_PROVIDER=gemini
+INTENT_CLASSIFIER_PROVIDER=gemini
+ACTION_AGENT_PROVIDER=gemini
+ACTION_EXTRACTION_PROVIDER=gemini
+ESCALATION_AGENT_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+GEMINI_CHAT_MODEL=gemini-2.5-flash
+# Optional lower-latency model for retrieval-query rewriting
+GEMINI_RETRIEVAL_QUERY_MODEL=gemini-2.5-flash-lite
+QDRANT_EMBEDDING_DIMENSION=1536
+QDRANT_PATH=vector_db/qdrant/data/local
+```
+
+This project currently uses Gemini embeddings for indexing and retrieval.
+For chat-generation providers, Azure OpenAI with a GPT-4.1 deployment is optional and can be used instead of Gemini Flash models.
+For latency-sensitive cases, you can use Gemini Flash-Lite (`gemini-2.5-flash-lite`) for selected steps such as retrieval-query rewriting.
+If needed, you can also set `GEMINI_CHAT_MODEL=gemini-2.5-flash-lite` to reduce latency more broadly.
+
+Optional Azure OpenAI GPT-4.1 provider setup (while keeping Gemini embeddings):
+
+```bash
+EMBEDDING_PROVIDER=gemini
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+KB_ANSWER_PROVIDER=azure_openai
+ACTION_AGENT_PROVIDER=azure_openai
+ACTION_EXTRACTION_PROVIDER=azure_openai
+INTENT_CLASSIFIER_PROVIDER=azure_openai
+ESCALATION_AGENT_PROVIDER=azure_openai
+AZURE_OPENAI_API_KEY=your_azure_openai_api_key_here
+AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com
+AZURE_OPENAI_CHAT_DEPLOYMENT=your_gpt_4_1_deployment_name
+AZURE_OPENAI_API_VERSION=2024-02-01
+```
+
+Config precedence at runtime:
+
+- real shell environment variables
+- `.env`
+- `config.yml`
+
+### 4) Initialize vector storage and index the demo KB
+
+This step is required for grounded KB answers.
+
+```bash
+.venv/bin/python scripts/setup_qdrant.py
+.venv/bin/python scripts/build_interview_demo_dataset.py
+FAQS_JSONL_PATH=cob_mock_kb_large/interview_demo_kb/retrieval/faqs/faqs.jsonl QDRANT_PATH=vector_db/qdrant/data/local .venv/bin/python scripts/run_faq_processing_pipeline.py
+DOCUMENTS_MANIFEST_PATH=cob_mock_kb_large/interview_demo_kb/retrieval/documents/documents_manifest.json QDRANT_PATH=vector_db/qdrant/data/local .venv/bin/python scripts/run_document_processing_pipeline.py
+```
+
+### 5) Run the app
+
+CLI chatbot:
+
+```bash
+.venv/bin/python scripts/run_cli_chat.py
+```
+
+Streamlit UI:
+
+```bash
+.venv/bin/python -m streamlit run ui/streamlit_app.py
+```
+
+No separate booking API server is needed; the local mock booking API starts automatically in-process.
+
+### 6) Optional verification
+
+Run tests:
+
+```bash
+.venv/bin/python -m pytest
+```
+
+Export the current graph image:
+
+```bash
+.venv/bin/python scripts/export_graph_png.py
+```
+
 ## Documentation
 
 Helpful repo docs:
@@ -418,6 +536,7 @@ Use the local virtual environment:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+pip install --upgrade pip
 pip install -e .
 ```
 
@@ -429,6 +548,8 @@ GEMINI_API_KEY=your_gemini_api_key_here
 # Latest stable Gemini embedding model
 GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 GEMINI_CHAT_MODEL=gemini-2.5-flash
+# Optional lower-latency model for retrieval-query rewriting
+GEMINI_RETRIEVAL_QUERY_MODEL=gemini-2.5-flash-lite
 KB_ANSWER_PROVIDER=gemini
 INTENT_CLASSIFIER_PROVIDER=gemini
 ESCALATION_AGENT_PROVIDER=gemini
@@ -436,7 +557,9 @@ GEMINI_MIN_REQUEST_INTERVAL_SECONDS=1.0
 QDRANT_EMBEDDING_DIMENSION=1536
 ```
 
-Azure OpenAI is also supported for chat generation:
+For latency-sensitive cases, Gemini Flash-Lite (`gemini-2.5-flash-lite`) can be used for selected steps, or as the main chat model if faster responses are preferred.
+
+Azure OpenAI is also supported for chat generation as an optional alternative to Gemini Flash models (for example, a GPT-4.1 deployment):
 
 ```bash
 KB_ANSWER_PROVIDER=azure_openai
@@ -446,7 +569,7 @@ INTENT_CLASSIFIER_PROVIDER=azure_openai
 ESCALATION_AGENT_PROVIDER=azure_openai
 AZURE_OPENAI_API_KEY=your_azure_openai_api_key_here
 AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com
-AZURE_OPENAI_CHAT_DEPLOYMENT=your_chat_deployment_name
+AZURE_OPENAI_CHAT_DEPLOYMENT=your_gpt_4_1_deployment_name
 AZURE_OPENAI_API_VERSION=2024-02-01
 ```
 
@@ -461,7 +584,7 @@ Config loading precedence is:
 
 ## Qdrant setup
 
-You can start Qdrant in one of two ways.
+This project uses embedded local Qdrant mode.
 
 ### Embedded local mode
 
@@ -475,16 +598,6 @@ Default storage path:
 
 ```text
 vector_db/qdrant/data/local
-```
-
-### Docker mode
-
-If you prefer running Qdrant as a separate service:
-
-```bash
-docker compose -f vector_db/qdrant/docker-compose.yml up -d qdrant
-export QDRANT_URL=http://localhost:6333
-.venv/bin/python scripts/setup_qdrant.py
 ```
 
 Standalone Qdrant docs live in:

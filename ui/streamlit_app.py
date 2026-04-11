@@ -23,6 +23,7 @@ from app.observability import (
 from app.services.knowledge_base import RetrievalKnowledgeBaseService
 
 logger = get_logger("ui.streamlit")
+_DEFAULT_STREAM_CHUNK_WORDS = 10
 
 
 class _IdentityRetrievalQueryRewriter:
@@ -210,11 +211,22 @@ def _ensure_session_state() -> None:
     if "retrieval_test_error" not in st.session_state:
         st.session_state.retrieval_test_error = ""
 
+    if "show_debug_panels" not in st.session_state:
+        st.session_state.show_debug_panels = False
+
 
 def _render_sidebar() -> None:
     with st.sidebar:
         st.title("Customer Care Demo")
         st.caption("Standalone Streamlit UI for the existing LangGraph backend.")
+        st.checkbox(
+            "Show debug panels (trace + retrieved chunks)",
+            key="show_debug_panels",
+            help=(
+                "Turning this off keeps the UI lighter and reduces payload transfer "
+                "from backend to frontend on each turn."
+            ),
+        )
 
         if st.button("Reset Chat", use_container_width=True):
             st.session_state.chat_state = create_initial_state("")
@@ -322,12 +334,19 @@ def _render_sidebar() -> None:
                 st.caption("No chunks returned for this test query.")
 
 
-def _render_message(message: dict[str, object]) -> None:
+def _render_message(
+    message: dict[str, object],
+    *,
+    show_debug_panels: bool,
+) -> None:
     with st.chat_message(str(message["role"])):
         st.markdown(str(message["content"]))
         latency_caption = str(message.get("latency_caption", "")).strip()
         if latency_caption:
             st.caption(latency_caption)
+
+        if not show_debug_panels:
+            return
 
         retrieval_query = str(message.get("retrieval_query", "")).strip()
         if retrieval_query:
@@ -357,16 +376,20 @@ def _render_message(message: dict[str, object]) -> None:
                     st.code(str(item), language="text")
 
 
-def _stream_response_text(text: str):
-    for token in text.split(" "):
-        if token:
-            yield f"{token} "
+def _stream_response_text(text: str, *, chunk_words: int = _DEFAULT_STREAM_CHUNK_WORDS):
+    words = [token for token in text.split(" ") if token]
+    if not words:
+        return
+    safe_chunk_words = max(1, chunk_words)
+    for index in range(0, len(words), safe_chunk_words):
+        yield " ".join(words[index : index + safe_chunk_words]) + " "
 
 
 def _run_turn(
     user_query: str,
     progress_placeholder=None,
     response_placeholder=None,
+    show_debug_panels: bool = True,
 ) -> dict[str, object]:
     trace_handler = st.session_state.trace_handler
     trace_handler.reset()
@@ -409,22 +432,32 @@ def _run_turn(
         next_state = working_state
     except Exception as exc:
         logger.exception("ui turn failed: %s", exc)
-        st.session_state.turn_logs = trace_handler.snapshot()
+        st.session_state.turn_logs = trace_handler.snapshot() if show_debug_panels else []
         raise
     st.session_state.chat_state = next_state
     logger.info(
         "ui turn completed final_response='%s'",
         truncate_text(next_state.get("final_response", ""), 140),
     )
-    turn_logs = trace_handler.snapshot()
+    turn_logs = trace_handler.snapshot() if show_debug_panels else []
     st.session_state.turn_logs = turn_logs
+    retrieval_query = (
+        str(next_state.get("retrieval_query", "")).strip()
+        if show_debug_panels
+        else ""
+    )
+    retrieved_context = (
+        list(next_state.get("retrieved_context", []))
+        if show_debug_panels
+        else []
+    )
     return {
         "content": next_state.get("final_response", "").strip()
         or "I wasn't able to generate a response.",
         "backend_invoke_ms": backend_invoke_ms,
         "response_rendered": response_rendered,
-        "retrieval_query": str(next_state.get("retrieval_query", "")).strip(),
-        "retrieved_context": list(next_state.get("retrieved_context", [])),
+        "retrieval_query": retrieval_query,
+        "retrieved_context": retrieved_context,
         "turn_logs": turn_logs,
     }
 
@@ -444,8 +477,9 @@ def main() -> None:
     st.caption("Demo UI for testing KB answers, bookings, and escalation flows.")
     _render_sidebar()
 
+    show_debug_panels = bool(st.session_state.show_debug_panels)
     for message in st.session_state.messages:
-        _render_message(message)
+        _render_message(message, show_debug_panels=show_debug_panels)
 
     user_query = st.chat_input("Ask about services, appointments, or support")
     if not user_query:
@@ -464,6 +498,7 @@ def main() -> None:
                 user_query,
                 progress_placeholder=progress_placeholder,
                 response_placeholder=response_placeholder,
+                show_debug_panels=show_debug_panels,
             )
         except Exception:
             assistant_message = {
@@ -489,32 +524,33 @@ def main() -> None:
             )
         st.caption(latency_caption)
 
-        retrieval_query = str(assistant_message.get("retrieval_query", "")).strip()
-        if retrieval_query:
-            with st.expander("Vector DB Query", expanded=False):
-                st.code(retrieval_query, language="text")
+        if show_debug_panels:
+            retrieval_query = str(assistant_message.get("retrieval_query", "")).strip()
+            if retrieval_query:
+                with st.expander("Vector DB Query", expanded=False):
+                    st.code(retrieval_query, language="text")
 
-        turn_logs = assistant_message.get("turn_logs", [])
-        if isinstance(turn_logs, list) and turn_logs:
-            routing_lines, node_lines = _extract_trace_sections(
-                [str(item) for item in turn_logs]
-            )
-            if routing_lines:
-                with st.expander("Routing Trace", expanded=False):
-                    st.code("\n".join(routing_lines), language="text")
-            if node_lines:
-                with st.expander("Node Trace", expanded=False):
-                    st.code("\n".join(node_lines), language="text")
+            turn_logs = assistant_message.get("turn_logs", [])
+            if isinstance(turn_logs, list) and turn_logs:
+                routing_lines, node_lines = _extract_trace_sections(
+                    [str(item) for item in turn_logs]
+                )
+                if routing_lines:
+                    with st.expander("Routing Trace", expanded=False):
+                        st.code("\n".join(routing_lines), language="text")
+                if node_lines:
+                    with st.expander("Node Trace", expanded=False):
+                        st.code("\n".join(node_lines), language="text")
 
-        retrieved_context = assistant_message.get("retrieved_context", [])
-        if isinstance(retrieved_context, list) and retrieved_context:
-            with st.expander(
-                f"Retrieved Chunks ({len(retrieved_context)})",
-                expanded=False,
-            ):
-                for index, item in enumerate(retrieved_context, start=1):
-                    st.caption(f"Chunk {index}")
-                    st.code(str(item), language="text")
+            retrieved_context = assistant_message.get("retrieved_context", [])
+            if isinstance(retrieved_context, list) and retrieved_context:
+                with st.expander(
+                    f"Retrieved Chunks ({len(retrieved_context)})",
+                    expanded=False,
+                ):
+                    for index, item in enumerate(retrieved_context, start=1):
+                        st.caption(f"Chunk {index}")
+                        st.code(str(item), language="text")
 
     st.session_state.messages.append(
         {
