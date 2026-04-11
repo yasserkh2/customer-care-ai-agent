@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from app.graph.state import ChatState, TurnOutcome
 from app.llm.contracts import ActionReplyGenerator
@@ -794,8 +794,9 @@ class AppointmentActionService:
         raw_slots: object = state.get("appointment_slots", {})
         if not isinstance(raw_slots, dict):
             return {}
+        raw_slots_dict = cast(dict[object, object], raw_slots)
         cleaned: dict[str, str] = {}
-        for raw_key, raw_value in raw_slots.items():
+        for raw_key, raw_value in raw_slots_dict.items():
             if not isinstance(raw_key, str) or not isinstance(raw_value, str):
                 continue
             key = raw_key.strip()
