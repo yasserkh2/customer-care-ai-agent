@@ -14,8 +14,8 @@ The project is set up as a runnable foundation for a customer support chatbot. I
 - Multi-turn appointment action agent with mock external integration
 - Mid-conversation human escalation routing with sticky handoff state
 - YAML-based runtime config through `config.yml` with `.env` overrides
-- OpenAI, Gemini, and Azure OpenAI support for KB answers, action replies, action extraction, and intent classification
-- Human escalation response path
+- OpenAI, Gemini, and Azure OpenAI support for KB answers, action replies, action extraction, intent classification, and escalation replies
+- Human escalation response path with LLM-first generation and safe template fallback
 - Shared chat state and conversation history handling
 - Session memory in the CLI chat loop
 - Standalone processing layer for ingestion, chunking, and vectorization
@@ -99,6 +99,8 @@ app/
     __init__.py
     action_extraction.py
     action_planning.py
+    escalation_factory.py
+    escalation_prompts.py
     intent_factory.py
     intent_prompts.py
     contracts.py
@@ -277,7 +279,7 @@ Retrieval ranking details:
 
 The action request path is now a real multi-turn appointment agent. It collects booking fields across turns, validates service/date/time/name/email state in code, asks for one missing field at a time, lets the LLM phrase the reply naturally, asks for confirmation only when the booking is complete, and then submits a mock booking request.
 
-The escalation path returns a human handoff message with a reason when available, clears active automated appointment state, and keeps the session in handoff mode through `handoff_pending`.
+The escalation path now uses an LLM-generated handoff reply when a provider is available. If generation fails or the provider is not configured, it falls back to a safe template message. It also clears active automated appointment state and keeps the session in handoff mode through `handoff_pending`.
 
 ### Human escalation flow
 
@@ -429,6 +431,7 @@ GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 GEMINI_CHAT_MODEL=gemini-2.5-flash
 KB_ANSWER_PROVIDER=gemini
 INTENT_CLASSIFIER_PROVIDER=gemini
+ESCALATION_AGENT_PROVIDER=gemini
 GEMINI_MIN_REQUEST_INTERVAL_SECONDS=1.0
 QDRANT_EMBEDDING_DIMENSION=1536
 ```
@@ -440,6 +443,7 @@ KB_ANSWER_PROVIDER=azure_openai
 ACTION_AGENT_PROVIDER=azure_openai
 ACTION_EXTRACTION_PROVIDER=azure_openai
 INTENT_CLASSIFIER_PROVIDER=azure_openai
+ESCALATION_AGENT_PROVIDER=azure_openai
 AZURE_OPENAI_API_KEY=your_azure_openai_api_key_here
 AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com
 AZURE_OPENAI_CHAT_DEPLOYMENT=your_chat_deployment_name
@@ -647,6 +651,9 @@ Key environment variables:
 - `ACTION_AGENT_PROVIDER`
 - `ACTION_EXTRACTION_PROVIDER`
 - `INTENT_CLASSIFIER_SYSTEM_PROMPT`
+- `ESCALATION_AGENT_PROVIDER`
+- `ESCALATION_AGENT_SYSTEM_PROMPT`
+- `ESCALATION_AGENT_MAX_OUTPUT_TOKENS`
 
 Important:
 - retrieval quality depends on using the same embedding provider for both ingestion and query time
@@ -685,8 +692,13 @@ Escalation example:
 
 ```text
 You: i need to escilate
-Bot: I need to transfer this conversation to a human agent. A human agent will follow up with you. Reason: User requested help from a human or showed frustration.
+Bot: I can absolutely connect you with a human teammate. Please share your name and either your phone number or email, and we will follow up shortly.
 ```
+
+Notes:
+
+- escalation replies are LLM-generated when the configured provider is available
+- if escalation generation is unavailable, the app automatically falls back to a safe template handoff message
 
 ## Documentation
 

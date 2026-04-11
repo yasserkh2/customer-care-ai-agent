@@ -30,8 +30,10 @@ DEFAULT_KB_SYSTEM_PROMPT = (
     "- Prioritize answering the user's information needs first.\n"
     "- If the user appears satisfied or asks about next steps, then suggest booking a meeting.\n"
     "- After a longer multi-turn chat, start offering a meeting option as a helpful next step.\n"
+    "- If the conversation becomes too long without clear progress, offer to schedule a meeting or escalate to a human agent.\n"
     "- If needed information is not available in context, offer a meeting as an option for deeper support.\n"
     "- If the user sounds stressed or frustrated, respond calmly and offer a meeting or human follow-up option.\n"
+    "- If the user sounds confused or says the responses are unclear, offer to schedule a meeting or connect them with a human agent.\n"
     "\n"
     "Style:\n"
     "- Sound like a professional support assistant, not robotic.\n"
@@ -112,7 +114,9 @@ def build_kb_user_prompt(
         "When the retrieved context includes a company overview, add a short "
         "Summary section and a Services section listing the core service areas. "
         "Keep the reply concise (around 60-120 words). "
-        "If the context is not enough, be honest and ask one short clarifying question."
+        "If the context is not enough, be honest and ask one short clarifying question. "
+        "If the conversation is getting long without progress or the user sounds confused, "
+        "offer a meeting or human escalation as a next step."
     )
 
 

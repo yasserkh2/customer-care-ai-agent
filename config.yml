@@ -3,9 +3,11 @@ retrieval_query_provider: azure_openai
 intent_classifier_provider: azure_openai
 action_agent_provider: azure_openai
 action_extraction_provider: azure_openai
+escalation_agent_provider: azure_openai
 
 embedding_provider: gemini
 kb_answer_max_output_tokens: 220
+escalation_agent_max_output_tokens: 180
 
 azure_openai:
   endpoint: https://your-resource-name.openai.azure.com
