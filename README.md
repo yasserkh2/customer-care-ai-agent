@@ -813,31 +813,6 @@ Notes:
 - escalation replies are LLM-generated when the configured provider is available
 - if escalation generation is unavailable, the app automatically falls back to a safe template handoff message
 
-## Documentation
 
-- `README.md`: project overview and usage
-- `UI_DEBUG_GUIDE.md`: how to use the Streamlit demo, vector-query display, retrieved chunks, and backend trace panels
-- `KB_AGENT_WALKTHROUGH.md`: end-to-end explanation of the KB agent flow, prompt, retrieval, memory, and fallback behavior
-- `DOCUMENT_RAG_IMPLEMENTATION.md`: document ingestion, chunking, dual-collection retrieval, and verification notes
-- `RETRIEVAL_QUERY_REWRITING.md`: follow-up query rewrite design and implementation details
-- `DEVELOPMENT_DECISIONS.md`: architecture and implementation decisions
-- `INTERFACE_DECISIONS.md`: contract-style and package-boundary decisions
-- `RAG_IMPLEMENTATION_PLAN.md`: initial RAG starting point and rollout plan
-- `OOP_SOLID_PRINCIPLES.md`: OOP and SOLID mapping to the codebase
-- `Customer Care AI Chatbot Agent Development Task-v2 (1) (1).md`: original task brief with implementation tracking notes
-- `vector_db/ARCHITECTURE.md`: vector DB layer placement and interface design
-- `vector_db/qdrant/README.md`: Qdrant standalone setup guide
-- `vector_db/qdrant/DECISION.md`: why Qdrant is the preferred vector DB for this task
-- `vector_db/qdrant/SETUP_SPECS.md`: local and production setup expectations
 
-## Next development steps
 
-- Add optional retrieval post-ranking as a separately gated experiment (without changing the cosine-only baseline).
-- Add provider-specific retry and error handling for embedding and generation failures
-- Add retrieval-quality checks for Gemini/OpenAI experiment sets
-- Expand ingestion beyond FAQs into documents and structured data
-- Add rescheduling and cancellation flow support in the action service
-- Add timezone normalization for booking dates and slots
-- Expand the LLM intent classifier prompt and evaluation rules for richer escalation decisions
-- Add automated tests for nodes, services, and routing
-- Improve the Streamlit debug presentation and source metadata display
