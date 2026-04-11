@@ -6,10 +6,35 @@ from app.graph.state import ChatState
 class HumanEscalationService:
     def build_response(self, state: ChatState) -> str:
         reason = state.get("escalation_reason") or "This request needs human support."
-        return (
+        name = str(state.get("escalation_contact_name") or "").strip()
+        email = str(state.get("escalation_contact_email") or "").strip()
+        phone = str(state.get("escalation_contact_phone") or "").strip()
+        escalation_case_id = str(state.get("escalation_case_id") or "").strip()
+        base_message = (
             "I need to transfer this conversation to a human agent. "
             "A human agent will follow up with you. "
             f"Reason: {reason}"
+        )
+        contact_channels = [channel for channel in (email, phone) if channel]
+        if contact_channels:
+            if len(contact_channels) == 2:
+                contact_text = f"{contact_channels[0]} or {contact_channels[1]}"
+            else:
+                contact_text = contact_channels[0]
+            thanks_prefix = f"Thanks {name}. " if name else "Thank you. "
+            case_suffix = (
+                f"Your escalation reference is {escalation_case_id}. "
+                if escalation_case_id
+                else ""
+            )
+            if name:
+                return f"{base_message} {thanks_prefix}{case_suffix}We will contact you at {contact_text} shortly."
+            return f"{base_message} {thanks_prefix}{case_suffix}We will contact you at {contact_text} shortly."
+
+        return (
+            f"{base_message} "
+            "Please share your name and either your phone number or email, "
+            "and our human team will contact you."
         )
 
 

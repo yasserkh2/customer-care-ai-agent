@@ -297,6 +297,9 @@ def _parse_intent_decision_text(content: str) -> IntentDecision:
         confidence=parsed["confidence"],
         frustration_flag=parsed["frustration_flag"],
         escalation_reason=parsed["escalation_reason"],
+        escalation_contact_name=parsed["escalation_contact_name"],
+        escalation_contact_email=parsed["escalation_contact_email"],
+        escalation_contact_phone=parsed["escalation_contact_phone"],
     )
 
 

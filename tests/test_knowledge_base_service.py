@@ -104,7 +104,7 @@ class BrokenQueryRewriter:
 
 
 class RetrievalKnowledgeBaseServiceTests(unittest.TestCase):
-    def test_contact_query_prioritizes_chunk_with_contact_details(self) -> None:
+    def test_contact_query_uses_highest_cosine_score_only(self) -> None:
         service = RetrievalKnowledgeBaseService(
             embedding_generator=StubEmbeddingGenerator([1.0]),
             searcher=StubVectorSearcher([]),
@@ -162,7 +162,7 @@ class RetrievalKnowledgeBaseServiceTests(unittest.TestCase):
         self.assertEqual(result.turn_outcome, "resolved")
         self.assertEqual(len(result.retrieved_context), 1)
         self.assertTrue(result.retrieved_context[0].startswith("Document: doc_0011"))
-        self.assertIn("Phone: +1 (929) 229-7207", result.retrieved_context[0])
+        self.assertIn("Section: Common Practice Scenarios", result.retrieved_context[0])
 
     def test_returns_grounded_generated_answer_and_context(self) -> None:
         embedding_generator = StubEmbeddingGenerator([0.1, 0.2, 0.3])
@@ -291,20 +291,9 @@ class RetrievalKnowledgeBaseServiceTests(unittest.TestCase):
 
         self.assertEqual(
             embedding_generator.queries,
-            ["What does Credentialing and Provider Maintenance usually include?"],
+            ["What This Service Usually Includes"],
         )
-        self.assertEqual(
-            query_rewriter.calls,
-            [
-                {
-                    "query": "What This Service Usually Includes",
-                    "history": [
-                        "user: do Credentialing and Provider Maintenance supports provider enrollment",
-                        "assistant: Yes, the Credentialing and Provider Maintenance service supports provider enrollment.",
-                    ],
-                }
-            ],
-        )
+        self.assertEqual(query_rewriter.calls, [])
 
     def test_returns_generation_error_when_answer_generation_fails(self) -> None:
         service = RetrievalKnowledgeBaseService(
@@ -411,7 +400,7 @@ class RetrievalKnowledgeBaseServiceTests(unittest.TestCase):
         self.assertEqual(result.turn_failure_reason, "knowledge_base_unavailable")
         self.assertEqual(list(result.retrieved_context), [])
 
-    def test_returns_error_when_query_generation_fails(self) -> None:
+    def test_ignores_query_rewriter_failures_and_uses_raw_query(self) -> None:
         service = RetrievalKnowledgeBaseService(
             embedding_generator=StubEmbeddingGenerator([1.0]),
             searcher=StubVectorSearcher([]),
@@ -421,12 +410,9 @@ class RetrievalKnowledgeBaseServiceTests(unittest.TestCase):
 
         result = service.answer({"user_query": "What is COB Solution?"})
 
-        self.assertIn("could not prepare a reliable search query", result.final_response)
+        self.assertIn("could not find a grounded answer", result.final_response)
         self.assertEqual(result.turn_outcome, "unresolved")
-        self.assertEqual(
-            result.turn_failure_reason,
-            "retrieval_query_generation_failed",
-        )
+        self.assertEqual(result.turn_failure_reason, "no_grounded_answer")
 
     def test_greeting_still_uses_retrieval_when_kb_service_is_called_directly(self) -> None:
         embedding_generator = StubEmbeddingGenerator([1.0])
@@ -480,6 +466,54 @@ class RetrievalKnowledgeBaseServiceTests(unittest.TestCase):
         self.assertEqual(result.final_response, "unused")
         self.assertEqual(result.turn_outcome, "resolved")
         self.assertEqual(len(result.retrieved_context), 1)
+
+    def test_prefers_highest_cosine_score_when_scores_are_close(self) -> None:
+        service = RetrievalKnowledgeBaseService(
+            embedding_generator=StubEmbeddingGenerator([1.0]),
+            searcher=StubVectorSearcher(
+                [
+                    VectorSearchMatch(
+                        point_id="point-1",
+                        record_id="faq_marketing_chunk_0001",
+                        score=0.90,
+                        payload={
+                            "faq_id": "faq_marketing",
+                            "category": "marketing",
+                            "service_name": "Digital Marketing and Website Services",
+                            "source_type": "faq",
+                            "text": (
+                                "Question: Do you support social media campaigns?\n"
+                                "Answer: Yes, we support campaign strategy and execution.\n"
+                                "Service: Digital Marketing and Website Services"
+                            ),
+                        },
+                    ),
+                    VectorSearchMatch(
+                        point_id="point-2",
+                        record_id="faq_credentialing_chunk_0001",
+                        score=0.88,
+                        payload={
+                            "faq_id": "faq_credentialing",
+                            "category": "credentialing",
+                            "service_name": "Credentialing and Provider Maintenance",
+                            "source_type": "faq",
+                            "text": (
+                                "Question: What does credentialing include?\n"
+                                "Answer: Credentialing includes primary source verification and provider enrollment support.\n"
+                                "Service: Credentialing and Provider Maintenance"
+                            ),
+                        },
+                    ),
+                ]
+            ),
+            answer_generator=StubAnswerGenerator("unused"),
+            query_rewriter=IdentityQueryRewriter(),
+        )
+
+        result = service.answer({"user_query": "What does credentialing include?"})
+
+        self.assertEqual(result.turn_outcome, "resolved")
+        self.assertTrue(result.retrieved_context[0].startswith("FAQ: faq_marketing"))
 
     def test_returns_document_context_and_generation_error_for_document_match(self) -> None:
         document_searcher = StubVectorSearcher(
@@ -601,8 +635,12 @@ class RetrievalKnowledgeBaseServiceTests(unittest.TestCase):
 
         self.assertEqual(result.turn_outcome, "resolved")
         self.assertEqual(len(result.retrieved_context), 2)
-        self.assertTrue(result.retrieved_context[0].startswith("Document: doc_0001"))
-        self.assertTrue(result.retrieved_context[1].startswith("FAQ: faq_001"))
+        self.assertTrue(
+            any(context.startswith("Document: doc_0001") for context in result.retrieved_context)
+        )
+        self.assertTrue(
+            any(context.startswith("FAQ: faq_001") for context in result.retrieved_context)
+        )
         self.assertEqual(embedding_generator.queries, ["What does credentialing include and what should we prepare?"])
         self.assertEqual(len(faq_searcher.calls), 1)
         self.assertEqual(len(document_searcher.calls), 1)

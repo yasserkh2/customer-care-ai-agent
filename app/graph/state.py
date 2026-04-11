@@ -24,6 +24,10 @@ class ChatState(TypedDict, total=False):
     turn_failure_reason: str | None
     frustration_flag: bool
     escalation_reason: str | None
+    escalation_contact_name: str | None
+    escalation_contact_email: str | None
+    escalation_contact_phone: str | None
+    escalation_case_id: str | None
     retrieved_context: list[str]
     active_action: str | None
     appointment_slots: dict[str, str]
@@ -55,6 +59,10 @@ def create_initial_state(user_query: str) -> ChatState:
         "turn_failure_reason": None,
         "frustration_flag": False,
         "escalation_reason": None,
+        "escalation_contact_name": None,
+        "escalation_contact_email": None,
+        "escalation_contact_phone": None,
+        "escalation_case_id": None,
         "retrieved_context": [],
         "active_action": None,
         "appointment_slots": {},

@@ -23,13 +23,21 @@ DEFAULT_INTENT_CLASSIFIER_SYSTEM_PROMPT = (
     "- Messages like dates, times, names, emails, yes/no confirmations, and option selections should usually stay in action_request when an action flow is active.\n"
     "- Messages like 'tomorrow', 'thursday', '10:30', 'the first one', 'yes', or an email address should usually continue the current workflow when the recent conversation shows the assistant was collecting booking details.\n"
     "- Questions like 'what services do you offer', 'what does this include', or 'how does it work' should usually be kb_query unless they are clearly part of an active booking flow.\n"
-    "- Treat words such as escalate, escalation, escilate, transfer, handoff, supervisor, human, representative, real person, or talk to support as strong escalation signals when used as a request for a person.\n"
+    "- Escalate immediately when the user directly asks to speak with a human, representative, supervisor, or real person.\n"
+    "- Escalate immediately when the user says they cannot understand the bot and describes the replies as rubbish, garbage, nonsense, or similarly unusable.\n"
+    "- Direct human-request signals include phrases like: speak/talk/connect/transfer me to or with a human/person/agent/representative/supervisor; real person; live agent; human agent; human support; escalate; escalation; escilate; escilation; handoff; supervisor; representative.\n"
+    "- Confusion signals include phrases like: cannot understand, can't understand, dont understand, don't understand, not understand, no sense, not clear, unclear, confusing, what are you saying, you are not helping.\n"
+    "- Low-quality/rubbish signals include phrases like: rubbish, garbage, nonsense, useless, terrible, awful, stupid.\n"
+    "- Treat words such as escalate, escalation, escilate, escilation, transfer, handoff, supervisor, human, representative, real person, or talk to support as strong escalation signals when used as a request for a person.\n"
     "- Mild dissatisfaction alone does not always mean human_escalation, but strong frustration or repeated failure should.\n"
     "\n"
     "Frustration guidance:\n"
     "- Set frustration_flag to true when the user sounds angry, upset, frustrated, disappointed, or says the bot is not helping.\n"
     "- frustration_flag may be true even if intent remains kb_query or action_request.\n"
     "- Set escalation_reason only when intent is human_escalation.\n"
+    "- When intent is human_escalation and the user provides contact details, extract escalation_contact_name, escalation_contact_email, and escalation_contact_phone when available.\n"
+    "- If contact info is not provided in the latest user message, keep escalation_contact_name/escalation_contact_email/escalation_contact_phone as null.\n"
+    "- When handoff is already pending and the user sends contact details, keep intent as human_escalation and populate the contact fields from that message.\n"
     "\n"
     "Confidence guidance:\n"
     "- Confidence must be a number between 0 and 1.\n"
@@ -41,13 +49,16 @@ DEFAULT_INTENT_CLASSIFIER_SYSTEM_PROMPT = (
     '- "Thursday works" during booking -> action_request\n'
     '- "yes, book it" during booking -> action_request\n'
     '- "I need a human agent" -> human_escalation\n'
+    '- "I want to speak with a real person" -> human_escalation\n'
+    '- "I cannot understand this bot, this is rubbish" -> human_escalation with frustration_flag true\n'
+    '- "Yasser Khira yasser@example.com" during handoff -> human_escalation with escalation_contact_name and escalation_contact_email\n'
     '- "this is the third time, you are not helping" -> human_escalation with frustration_flag true\n'
     '- "hi" -> general_conversation\n'
     '- "thanks" -> general_conversation\n'
     '- "what can you do?" -> general_conversation\n'
     "\n"
     "Return valid JSON with exactly these keys and no extras:\n"
-    '{"intent": "kb_query", "confidence": 0.0, "frustration_flag": false, "escalation_reason": null}\n'
+    '{"intent": "kb_query", "confidence": 0.0, "frustration_flag": false, "escalation_reason": null, "escalation_contact_name": null, "escalation_contact_email": null, "escalation_contact_phone": null}\n'
 )
 
 
@@ -71,7 +82,7 @@ def build_intent_classifier_prompt(
         "Think about the best next route for the user: knowledge answer, workflow continuation, conversational guidance, or human handoff.\n"
         "Use the recent conversation as primary context when the latest message is short, referential, or ambiguous.\n\n"
         "Return valid JSON with exactly these keys:\n"
-        '{"intent": "kb_query", "confidence": 0.0, "frustration_flag": false, "escalation_reason": null}'
+        '{"intent": "kb_query", "confidence": 0.0, "frustration_flag": false, "escalation_reason": null, "escalation_contact_name": null, "escalation_contact_email": null, "escalation_contact_phone": null}'
     )
 
 def parse_intent_decision_payload(payload: dict[str, object]) -> dict[str, object]:
@@ -90,10 +101,24 @@ def parse_intent_decision_payload(payload: dict[str, object]) -> dict[str, objec
     escalation_reason = payload.get("escalation_reason")
     if escalation_reason is not None:
         escalation_reason = str(escalation_reason).strip() or None
+    escalation_contact_name = payload.get("escalation_contact_name")
+    if escalation_contact_name is not None:
+        escalation_contact_name = str(escalation_contact_name).strip() or None
+
+    escalation_contact_email = payload.get("escalation_contact_email")
+    if escalation_contact_email is not None:
+        escalation_contact_email = str(escalation_contact_email).strip() or None
+
+    escalation_contact_phone = payload.get("escalation_contact_phone")
+    if escalation_contact_phone is not None:
+        escalation_contact_phone = str(escalation_contact_phone).strip() or None
 
     return {
         "intent": intent,
         "confidence": confidence,
         "frustration_flag": frustration_flag,
         "escalation_reason": escalation_reason,
+        "escalation_contact_name": escalation_contact_name,
+        "escalation_contact_email": escalation_contact_email,
+        "escalation_contact_phone": escalation_contact_phone,
     }

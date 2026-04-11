@@ -22,6 +22,9 @@ It shows:
   The rewritten query that is embedded and sent to retrieval
 - `Retrieved Chunks`
   The chunks returned for the current turn and for each assistant message
+- `RAG Chunk Tester`
+  A retrieval-only test form in the sidebar that runs chunk retrieval directly and
+  shows chunk metadata (`source`, `score`, `service`, `section`) plus raw chunk text
 - `Backend Trace`
   Per-turn logs for graph routing, node execution, retrieval, and escalation
 

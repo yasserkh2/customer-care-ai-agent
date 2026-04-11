@@ -12,11 +12,20 @@ class IntentDecision:
     confidence: float
     frustration_flag: bool = False
     escalation_reason: str | None = None
+    escalation_contact_name: str | None = None
+    escalation_contact_email: str | None = None
+    escalation_contact_phone: str | None = None
 
     def as_state_update(self) -> ChatState:
+        is_escalation = self.intent == "human_escalation"
         return {
             "intent": self.intent,
             "confidence": self.confidence,
+            "frustration_flag": self.frustration_flag,
+            "escalation_reason": self.escalation_reason if is_escalation else None,
+            "escalation_contact_name": self.escalation_contact_name,
+            "escalation_contact_email": self.escalation_contact_email,
+            "escalation_contact_phone": self.escalation_contact_phone,
         }
 
 
@@ -36,4 +45,5 @@ class KnowledgeBaseAnswer:
             "retrieved_context": list(self.retrieved_context),
             "turn_outcome": self.turn_outcome,
             "turn_failure_reason": self.turn_failure_reason,
+            "escalation_reason": self.escalation_reason,
         }

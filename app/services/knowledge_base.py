@@ -2,21 +2,14 @@ from __future__ import annotations
 
 import re
 from concurrent.futures import ThreadPoolExecutor
-from time import perf_counter
 from dataclasses import dataclass
+from time import perf_counter
 from typing import TYPE_CHECKING
 
 from app.graph.state import ChatState
 from app.llm import AnswerGenerator, KbAnswerGeneratorFactory
 from app.observability import get_logger, truncate_text
-from app.services.contracts import RetrievalQueryRewriter
 from app.services.models import KnowledgeBaseAnswer
-from app.services.query_rewriting import LlmRetrievalQueryRewriter
-from app.services.reranking import (
-    Reranker,
-    build_reranker_from_env,
-    rerank_candidate_limit,
-)
 from processing.vectorization import build_embedding_generator
 from processing.vectorization.contracts import EmbeddingGenerator
 from vector_db.contracts import VectorSearcher
@@ -32,29 +25,6 @@ _FAQ_TEXT_PATTERN = re.compile(
     r"Answer:\s*(?P<answer>.*?)\n"
     r"Service:\s*(?P<service>[^\n]*)",
     re.DOTALL,
-)
-_CONTACT_QUERY_TERMS = (
-    "contact",
-    "phone",
-    "email",
-    "e-mail",
-    "address",
-    "location",
-    "where",
-    "linkedin",
-    "facebook",
-    "instagram",
-    "reach",
-    "call",
-)
-_CONTACT_EVIDENCE_TERMS = (
-    "phone:",
-    "email:",
-    "office address:",
-    "map link:",
-    "linkedin:",
-    "facebook:",
-    "instagram:",
 )
 
 
@@ -100,6 +70,16 @@ class RetrievedContextItem:
         return "\n".join(lines)
 
 
+@dataclass(frozen=True, slots=True)
+class _RetrievalSearchStats:
+    embed_ms: float
+    searcher_setup_ms: float
+    faq_search_ms: float
+    document_search_ms: float
+    retrieval_ms: float
+    parallel_wait_overhead_ms: float
+
+
 class RetrievalKnowledgeBaseService:
     def __init__(
         self,
@@ -108,8 +88,8 @@ class RetrievalKnowledgeBaseService:
         answer_generator: AnswerGenerator | None = None,
         retrieval_limit: int = 3,
         document_searcher: VectorSearcher | None = None,
-        query_rewriter: RetrievalQueryRewriter | None = None,
-        reranker: Reranker | None = None,
+        query_rewriter: object | None = None,
+        reranker: object | None = None,
     ) -> None:
         if retrieval_limit <= 0:
             raise ValueError("retrieval_limit must be greater than zero.")
@@ -120,9 +100,7 @@ class RetrievalKnowledgeBaseService:
         self._answer_generator = answer_generator
         self._retrieval_limit = retrieval_limit
         self._search_documents = document_searcher is not None or searcher is None
-        self._query_rewriter = query_rewriter or LlmRetrievalQueryRewriter()
-        self._reranker = reranker or build_reranker_from_env()
-        self._rerank_candidates = rerank_candidate_limit(self._retrieval_limit)
+        _ = (query_rewriter, reranker)
         self._settings: QdrantSettings | None = None
         self._document_settings: QdrantSettings | None = None
         self._warmed_up = False
@@ -138,8 +116,6 @@ class RetrievalKnowledgeBaseService:
             if self._search_documents:
                 self._get_document_searcher()
             self._get_answer_generator()
-            if self._reranker is not None:
-                self._reranker.warmup()
             self._warmed_up = True
             logger.info(
                 "kb service warmup completed (ms=%.1f)",
@@ -163,22 +139,8 @@ class RetrievalKnowledgeBaseService:
             )
 
         history = list(state.get("history", []))
-
-        rewrite_start = perf_counter()
-        try:
-            retrieval_query = self._query_rewriter.rewrite(query=query, history=history)
-        except Exception as exc:
-            logger.warning("kb query rewriting failed: %s", exc)
-            return KnowledgeBaseAnswer(
-                final_response=(
-                    "I could not prepare a reliable search query for your request. "
-                    "Please try rephrasing your question."
-                ),
-                retrieval_query=query,
-                turn_outcome="unresolved",
-                turn_failure_reason="retrieval_query_generation_failed",
-            )
-        rewrite_ms = (perf_counter() - rewrite_start) * 1000
+        retrieval_query = query
+        rewrite_ms = 0.0
         logger.info("kb retrieval query='%s'", truncate_text(retrieval_query, 140))
         try:
             matches = self._retrieve(retrieval_query)
@@ -247,82 +209,14 @@ class RetrievalKnowledgeBaseService:
         )
 
     def _retrieve(self, query: str) -> list[VectorSearchMatch]:
-        embedding_generator = self._get_embedding_generator()
-        embed_start = perf_counter()
-        query_vector = embedding_generator.embed_query(query)
-        embed_ms = (perf_counter() - embed_start) * 1000
-        logger.info("kb embedding generated for retrieval query")
-
-        retrieval_start = perf_counter()
-        searcher_setup_start = perf_counter()
-        faq_searcher = self._get_searcher()
-        document_searcher = self._get_document_searcher() if self._search_documents else None
-        searcher_setup_ms = (perf_counter() - searcher_setup_start) * 1000
-        faq_matches: list[VectorSearchMatch] = []
-        faq_search_ms = 0.0
-        document_matches: list[VectorSearchMatch] = []
-        document_search_ms = 0.0
-
-        def run_search(searcher: VectorSearcher) -> tuple[list[VectorSearchMatch], float]:
-            search_start = perf_counter()
-            matches = searcher.search(
-                query_vector=query_vector,
-                limit=self._retrieval_limit,
-                with_vectors=False,
-            )
-            return matches, (perf_counter() - search_start) * 1000
-
-        if self._search_documents:
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                faq_future = executor.submit(run_search, faq_searcher)
-                document_future = executor.submit(
-                    run_search,
-                    document_searcher,
-                )
-                faq_matches, faq_search_ms = faq_future.result()
-                document_matches, document_search_ms = document_future.result()
-        else:
-            faq_matches, faq_search_ms = run_search(faq_searcher)
-
-        retrieval_ms = (perf_counter() - retrieval_start) * 1000
-        raw_parallel_wait_ms = retrieval_ms - searcher_setup_ms - max(
-            faq_search_ms,
-            document_search_ms,
+        query_vector, embed_ms = self._embed_query_vector(query)
+        faq_matches, document_matches, search_stats = self._search_all_collections(
+            query_vector=query_vector,
+            embed_ms=embed_ms,
         )
-        parallel_wait_overhead_ms = max(0.0, raw_parallel_wait_ms)
         combined_matches = faq_matches + document_matches
-        combined_matches.sort(
-            key=lambda item: self._scored_retrieval_priority(query, item),
-            reverse=True,
-        )
+        combined_matches.sort(key=lambda item: item.score, reverse=True)
         top_matches = combined_matches[: self._retrieval_limit]
-        if self._reranker and combined_matches:
-            rerank_candidates = combined_matches[: self._rerank_candidates]
-            rerank_start = perf_counter()
-            try:
-                reranked = self._reranker.rerank(
-                    query=query,
-                    matches=rerank_candidates,
-                    top_k=self._retrieval_limit,
-                )
-            except Exception as exc:
-                logger.warning("kb rerank failed: %s", exc)
-                reranked = None
-            rerank_ms = (perf_counter() - rerank_start) * 1000
-            if reranked:
-                top_matches = reranked
-                logger.info(
-                    "kb rerank applied candidates=%s results=%s rerank_ms=%.1f",
-                    len(rerank_candidates),
-                    len(reranked),
-                    rerank_ms,
-                )
-            else:
-                logger.info(
-                    "kb rerank skipped candidates=%s rerank_ms=%.1f",
-                    len(rerank_candidates),
-                    rerank_ms,
-                )
         logger.info(
             "kb retrieved faq_matches=%s document_matches=%s total=%s top=%s (embed_ms=%.1f searcher_setup_ms=%.1f faq_search_ms=%.1f doc_search_ms=%.1f retrieval_ms=%.1f parallel_wait_overhead_ms=%.1f)",
             len(faq_matches),
@@ -336,49 +230,81 @@ class RetrievalKnowledgeBaseService:
                 }
                 for match in top_matches
             ],
-            embed_ms,
-            searcher_setup_ms,
-            faq_search_ms,
-            document_search_ms,
-            retrieval_ms,
-            parallel_wait_overhead_ms,
+            search_stats.embed_ms,
+            search_stats.searcher_setup_ms,
+            search_stats.faq_search_ms,
+            search_stats.document_search_ms,
+            search_stats.retrieval_ms,
+            search_stats.parallel_wait_overhead_ms,
         )
         return top_matches
 
-    def _scored_retrieval_priority(
+    def _embed_query_vector(self, query: str) -> tuple[list[float], float]:
+        embedding_generator = self._get_embedding_generator()
+        embed_start = perf_counter()
+        query_vector = embedding_generator.embed_query(query)
+        embed_ms = (perf_counter() - embed_start) * 1000
+        logger.info("kb embedding generated for retrieval query")
+        return query_vector, embed_ms
+
+    def _search_all_collections(
         self,
-        query: str,
-        match: VectorSearchMatch,
-    ) -> tuple[float, float]:
-        bonus = 0.0
-        if self._is_contact_query(query):
-            bonus = self._contact_evidence_bonus(match)
-        return (match.score + bonus, match.score)
+        *,
+        query_vector: list[float],
+        embed_ms: float,
+    ) -> tuple[list[VectorSearchMatch], list[VectorSearchMatch], _RetrievalSearchStats]:
+        retrieval_start = perf_counter()
+        searcher_setup_start = perf_counter()
+        faq_searcher = self._get_searcher()
+        document_searcher = self._get_document_searcher() if self._search_documents else None
+        searcher_setup_ms = (perf_counter() - searcher_setup_start) * 1000
 
-    def _is_contact_query(self, query: str) -> bool:
-        normalized = query.strip().lower()
-        if not normalized:
-            return False
-        return any(term in normalized for term in _CONTACT_QUERY_TERMS)
+        faq_matches: list[VectorSearchMatch]
+        faq_search_ms: float
+        document_matches: list[VectorSearchMatch] = []
+        document_search_ms = 0.0
 
-    def _contact_evidence_bonus(self, match: VectorSearchMatch) -> float:
-        payload = match.payload
-        searchable = " ".join(
-            str(payload.get(field, "")).strip().lower()
-            for field in ("title", "service_name", "section_title", "text")
+        if self._search_documents:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                faq_future = executor.submit(self._search_collection, faq_searcher, query_vector)
+                document_future = executor.submit(
+                    self._search_collection,
+                    document_searcher,
+                    query_vector,
+                )
+                faq_matches, faq_search_ms = faq_future.result()
+                document_matches, document_search_ms = document_future.result()
+        else:
+            faq_matches, faq_search_ms = self._search_collection(faq_searcher, query_vector)
+
+        retrieval_ms = (perf_counter() - retrieval_start) * 1000
+        raw_parallel_wait_ms = retrieval_ms - searcher_setup_ms - max(
+            faq_search_ms,
+            document_search_ms,
         )
-        if not searchable:
-            return 0.0
-
-        evidence_hits = sum(
-            1 for term in _CONTACT_EVIDENCE_TERMS if term in searchable
+        parallel_wait_overhead_ms = max(0.0, raw_parallel_wait_ms)
+        stats = _RetrievalSearchStats(
+            embed_ms=embed_ms,
+            searcher_setup_ms=searcher_setup_ms,
+            faq_search_ms=faq_search_ms,
+            document_search_ms=document_search_ms,
+            retrieval_ms=retrieval_ms,
+            parallel_wait_overhead_ms=parallel_wait_overhead_ms,
         )
-        if evidence_hits == 0:
-            return 0.0
+        return faq_matches, document_matches, stats
 
-        # Keep bonus small so vector similarity remains dominant while preferring
-        # concrete contact-detail chunks when scores are close.
-        return min(0.05, evidence_hits * 0.01)
+    def _search_collection(
+        self,
+        searcher: VectorSearcher,
+        query_vector: list[float],
+    ) -> tuple[list[VectorSearchMatch], float]:
+        search_start = perf_counter()
+        matches = searcher.search(
+            query_vector=query_vector,
+            limit=self._retrieval_limit,
+            with_vectors=False,
+        )
+        return matches, (perf_counter() - search_start) * 1000
 
     def _generate_answer(
         self,

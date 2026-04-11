@@ -92,7 +92,61 @@ class LlmIntentClassifierTests(unittest.TestCase):
 
         self.assertEqual(result.intent, "general_conversation")
 
-    def test_falls_back_to_static_kb_decision_when_generator_fails(self) -> None:
+    def test_uses_llm_human_escalation_for_direct_human_request(self) -> None:
+        generator = StubIntentDecisionGenerator(
+            IntentDecision(
+                intent="human_escalation",
+                confidence=0.96,
+                frustration_flag=False,
+                escalation_reason="User directly asked to speak with a human agent.",
+            )
+        )
+        classifier = LlmIntentClassifier(decision_generator=generator)
+
+        result = classifier.classify(
+            {
+                "user_query": "Please connect me with a human agent.",
+                "history": [],
+                "active_action": None,
+                "failure_count": 0,
+            }
+        )
+
+        self.assertEqual(result.intent, "human_escalation")
+        self.assertGreaterEqual(result.confidence, 0.96)
+        self.assertEqual(
+            result.escalation_reason,
+            "User directly asked to speak with a human agent.",
+        )
+
+    def test_uses_llm_human_escalation_for_confusion_and_rubbish_signal(self) -> None:
+        generator = StubIntentDecisionGenerator(
+            IntentDecision(
+                intent="human_escalation",
+                confidence=0.93,
+                frustration_flag=True,
+                escalation_reason="User could not understand the assistant and asked for better support.",
+            )
+        )
+        classifier = LlmIntentClassifier(decision_generator=generator)
+
+        result = classifier.classify(
+            {
+                "user_query": "I cannot understand this bot, the response is rubbish.",
+                "history": [],
+                "active_action": None,
+                "failure_count": 0,
+            }
+        )
+
+        self.assertEqual(result.intent, "human_escalation")
+        self.assertTrue(result.frustration_flag)
+        self.assertEqual(
+            result.escalation_reason,
+            "User could not understand the assistant and asked for better support.",
+        )
+
+    def test_fallback_uses_static_kb_decision_when_generator_fails_even_for_escalation_wording(self) -> None:
         classifier = LlmIntentClassifier(
             decision_generator=FailingIntentDecisionGenerator()
         )
@@ -100,6 +154,22 @@ class LlmIntentClassifierTests(unittest.TestCase):
         result = classifier.classify(
             {
                 "user_query": "i need to escilate",
+            }
+        )
+
+        self.assertEqual(result.intent, "kb_query")
+        self.assertEqual(result.confidence, 0.0)
+        self.assertFalse(result.frustration_flag)
+        self.assertIsNone(result.escalation_reason)
+
+    def test_fallback_uses_static_kb_decision_for_neutral_query_when_generator_fails(self) -> None:
+        classifier = LlmIntentClassifier(
+            decision_generator=FailingIntentDecisionGenerator()
+        )
+
+        result = classifier.classify(
+            {
+                "user_query": "What services do you offer?",
             }
         )
 

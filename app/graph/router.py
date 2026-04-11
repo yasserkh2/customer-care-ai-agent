@@ -8,7 +8,11 @@ logger = get_logger("graph.router")
 class ActiveFlowRouter:
     def __call__(self, state: ChatState) -> str:
         if state.get("handoff_pending"):
-            route = "human_escalation"
+            has_contact_channel = bool(
+                state.get("escalation_contact_email")
+                or state.get("escalation_contact_phone")
+            )
+            route = "human_escalation" if has_contact_channel else "classify_intent"
         elif state.get("active_action") == "appointment_scheduling":
             route = "action_request"
         else:

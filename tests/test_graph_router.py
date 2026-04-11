@@ -7,11 +7,24 @@ from app.services.router import DefaultIntentRouter
 
 
 class ActiveFlowRouterTests(unittest.TestCase):
-    def test_routes_handoff_pending_turn_directly_to_human_escalation(self) -> None:
+    def test_routes_handoff_pending_turn_to_classify_intent_when_contact_is_missing(self) -> None:
         router = ActiveFlowRouter()
 
         route = router(
             {"handoff_pending": True, "active_action": "appointment_scheduling"}
+        )
+
+        self.assertEqual(route, "classify_intent")
+
+    def test_routes_handoff_pending_turn_directly_to_human_escalation_when_contact_exists(self) -> None:
+        router = ActiveFlowRouter()
+
+        route = router(
+            {
+                "handoff_pending": True,
+                "escalation_contact_email": "user@example.com",
+                "active_action": "appointment_scheduling",
+            }
         )
 
         self.assertEqual(route, "human_escalation")

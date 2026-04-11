@@ -154,8 +154,8 @@
         "title": "Medical Auditing"
       },
       "10:30 AM": {
-        "state": "free",
-        "title": ""
+        "state": "booked",
+        "title": "Communication Services"
       },
       "11:00 AM": {
         "state": "free",
@@ -2180,6 +2180,16 @@
       "name": "Yasser Khira",
       "email": "yasserkhira64@gmail.com",
       "title": "Medical Auditing",
+      "status": "confirmed"
+    },
+    "apt_4dbb1ab8ca": {
+      "confirmation_id": "apt_4dbb1ab8ca",
+      "service": "Communication Services",
+      "date": "2026-04-17",
+      "time": "10:30 AM",
+      "name": "Yasser Khira",
+      "email": "yasser@gmail.com",
+      "title": "Communication Services",
       "status": "confirmed"
     }
   }

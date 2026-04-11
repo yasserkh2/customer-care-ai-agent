@@ -1,0 +1,13 @@
+{
+  "escalations": {
+    "esc_7cf4d037-8159-48b2-90b3-dd7b24acb1e3": {
+      "escalation_id": "esc_7cf4d037-8159-48b2-90b3-dd7b24acb1e3",
+      "name": "",
+      "email": "yasserkhira64@gmail.co",
+      "phone": "",
+      "reason": "User requested human support and provided contact info after expressing frustration",
+      "status": "open",
+      "created_at_utc": "2026-04-11T09:04:20.309496+00:00"
+    }
+  }
+}

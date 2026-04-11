@@ -55,6 +55,7 @@ def summarize_update(update: Mapping[str, Any]) -> dict[str, Any]:
         "turn_outcome",
         "turn_failure_reason",
         "escalation_reason",
+        "escalation_case_id",
         "awaiting_confirmation",
         "booking_error",
         "booking_confirmation_id",
