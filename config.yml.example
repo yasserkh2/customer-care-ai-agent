@@ -21,7 +21,7 @@ gemini:
 openai:
   # NOTE: OpenAI provider path is not fully validated in this project yet.
   # TODO: Add dedicated end-to-end tests and finalize implementation hardening.
-  chat_model: gpt-4o-mini
+  chat_model: gpt-4.1-mini
   embedding_model: text-embedding-3-small
 
 reranker:

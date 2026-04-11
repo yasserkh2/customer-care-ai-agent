@@ -114,7 +114,7 @@ class OpenAIAppointmentExtractor(LlmAppointmentExtractor):
     def from_env(cls) -> "OpenAIAppointmentExtractor":
         return cls(
             api_key=os.getenv("OPENAI_API_KEY", ""),
-            model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini"),
+            model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini"),
             system_prompt=os.getenv(
                 "ACTION_EXTRACTION_SYSTEM_PROMPT",
                 DEFAULT_ACTION_EXTRACTION_SYSTEM_PROMPT,

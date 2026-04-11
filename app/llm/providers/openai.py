@@ -49,7 +49,7 @@ class OpenAIKbAnswerGenerator:
     def from_env(cls) -> "OpenAIKbAnswerGenerator":
         return cls(
             api_key=os.getenv("OPENAI_API_KEY", ""),
-            model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini"),
+            model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini"),
             system_prompt=os.getenv("KB_ANSWER_SYSTEM_PROMPT", DEFAULT_KB_SYSTEM_PROMPT),
             max_output_tokens=int(os.getenv("KB_ANSWER_MAX_OUTPUT_TOKENS", "220")),
         )
@@ -119,7 +119,7 @@ class OpenAIActionReplyGenerator:
     def from_env(cls) -> "OpenAIActionReplyGenerator":
         return cls(
             api_key=os.getenv("OPENAI_API_KEY", ""),
-            model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini"),
+            model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini"),
             system_prompt=os.getenv(
                 "ACTION_AGENT_SYSTEM_PROMPT",
                 DEFAULT_ACTION_AGENT_SYSTEM_PROMPT,
@@ -181,7 +181,7 @@ class OpenAIIntentDecisionGenerator:
     def from_env(cls) -> "OpenAIIntentDecisionGenerator":
         return cls(
             api_key=os.getenv("OPENAI_API_KEY", ""),
-            model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini"),
+            model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini"),
             system_prompt=os.getenv(
                 "INTENT_CLASSIFIER_SYSTEM_PROMPT",
                 DEFAULT_INTENT_CLASSIFIER_SYSTEM_PROMPT,
@@ -260,7 +260,7 @@ class OpenAIRetrievalQueryGenerator:
                 "OPENAI_RETRIEVAL_QUERY_MODEL",
                 os.getenv(
                     "RETRIEVAL_QUERY_MODEL",
-                    os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini"),
+                    os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini"),
                 ),
             ),
             system_prompt=os.getenv(
