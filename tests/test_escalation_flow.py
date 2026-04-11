@@ -98,6 +98,8 @@ class EscalationFlowTests(unittest.TestCase):
         service_route = self._service_result_router(merged_state)
         if service_route == "human_escalation":
             return self._respond_after_handoff(merged_state, human_escalation)
+        if service_route == "response":
+            return {**merged_state, **self._response(merged_state)}
 
         merged_state = {**merged_state, **self._evaluate_escalation.evaluate(merged_state)}
         post_turn_route = self._post_turn_router(merged_state)

@@ -1,7 +1,6 @@
 from app.observability import get_logger, summarize_state, summarize_update, truncate_text
 from app.graph.state import ChatState
 from app.services.contracts import IntentClassifier
-from app.services.intent import KeywordIntentClassifier
 
 logger = get_logger("graph.nodes.classify_intent")
 
@@ -20,10 +19,3 @@ class ClassifyIntentNode:
         update = decision.as_state_update()
         logger.info("classify_intent completed: %s", summarize_update(update))
         return update
-
-
-_default_node = ClassifyIntentNode(KeywordIntentClassifier())
-
-
-def classify_intent(state: ChatState) -> ChatState:
-    return _default_node(state)

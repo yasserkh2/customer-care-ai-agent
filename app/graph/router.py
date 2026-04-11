@@ -1,7 +1,6 @@
 from app.graph.state import ChatState
 from app.observability import get_logger, summarize_state
 from app.services.contracts import IntentRouter
-from app.services.router import DefaultIntentRouter
 
 logger = get_logger("graph.router")
 
@@ -32,11 +31,6 @@ class GraphRouter:
         )
         return route
 
-
-_default_active_flow_router = ActiveFlowRouter()
-_default_router = GraphRouter(DefaultIntentRouter())
-
-
 class PostTurnRouter:
     def __call__(self, state: ChatState) -> str:
         if state.get("handoff_pending"):
@@ -51,23 +45,9 @@ class ServiceResultRouter:
     def __call__(self, state: ChatState) -> str:
         if state.get("handoff_pending"):
             route = "human_escalation"
+        elif state.get("turn_outcome") == "resolved" and not state.get("frustration_flag"):
+            route = "response"
         else:
             route = "evaluate_escalation"
         logger.info("service_result route=%s state=%s", route, summarize_state(state))
         return route
-
-
-def route_active_flow(state: ChatState) -> str:
-    return _default_active_flow_router(state)
-
-
-def route_intent(state: ChatState) -> str:
-    return _default_router(state)
-
-
-def route_post_turn(state: ChatState) -> str:
-    return PostTurnRouter()(state)
-
-
-def route_service_result(state: ChatState) -> str:
-    return ServiceResultRouter()(state)

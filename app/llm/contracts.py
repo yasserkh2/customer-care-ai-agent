@@ -2,11 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from app.services.action_models import (
-    AppointmentActionDecision,
-    AppointmentActionPlanningContext,
-    AppointmentActionReplyContext,
-)
+from app.services.action_models import AppointmentActionReplyContext
 from app.services.models import IntentDecision
 
 
@@ -25,14 +21,6 @@ class ActionReplyGenerator(Protocol):
         ...
 
 
-class ActionDecisionGenerator(Protocol):
-    def plan_next_step(
-        self,
-        context: AppointmentActionPlanningContext,
-    ) -> AppointmentActionDecision:
-        ...
-
-
 class IntentDecisionGenerator(Protocol):
     def classify_intent(
         self,
@@ -41,4 +29,13 @@ class IntentDecisionGenerator(Protocol):
         active_action: str | None,
         failure_count: int,
     ) -> IntentDecision:
+        ...
+
+
+class RetrievalQueryGenerator(Protocol):
+    def generate_query(
+        self,
+        user_query: str,
+        conversation_history: list[str],
+    ) -> str:
         ...

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 
 DEFAULT_INTENT_CLASSIFIER_SYSTEM_PROMPT = (
     "You classify the latest user turn for a customer-care assistant into one of three intents. "
@@ -76,11 +74,6 @@ def build_intent_classifier_prompt(
         '{"intent": "kb_query", "confidence": 0.0, "frustration_flag": false, "escalation_reason": null}'
     )
 
-
-def build_history_block(conversation_history: list[str]) -> str:
-    return "\n".join(message.strip() for message in conversation_history[-6:] if message.strip()) or "[no prior conversation]"
-
-
 def parse_intent_decision_payload(payload: dict[str, object]) -> dict[str, object]:
     intent = str(payload.get("intent", "")).strip()
     if intent not in {"kb_query", "action_request", "human_escalation", "general_conversation"}:
@@ -104,20 +97,3 @@ def parse_intent_decision_payload(payload: dict[str, object]) -> dict[str, objec
         "frustration_flag": frustration_flag,
         "escalation_reason": escalation_reason,
     }
-
-
-def build_intent_classifier_debug_payload(
-    user_query: str,
-    conversation_history: list[str],
-    active_action: str | None,
-    failure_count: int,
-) -> str:
-    return json.dumps(
-        {
-            "user_query": user_query,
-            "conversation_history": conversation_history[-6:],
-            "active_action": active_action,
-            "failure_count": failure_count,
-        },
-        sort_keys=True,
-    )

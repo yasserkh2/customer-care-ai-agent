@@ -1,26 +1,38 @@
 kb_answer_provider: azure_openai
+retrieval_query_provider: gemini
 action_agent_provider: azure_openai
 action_extraction_provider: azure_openai
-intent_classifier_provider: azure_openai
+intent_classifier_provider: gemini
 
 embedding_provider: gemini
+kb_answer_max_output_tokens: 220
 
 azure_openai:
-  api_key: your_azure_openai_api_key_here
   endpoint: https://your-resource-name.openai.azure.com
   chat_deployment: your_chat_deployment_name
   api_version: 2024-02-01
 
 gemini:
-  api_key: your_gemini_api_key_here
   chat_model: gemini-2.5-flash
+  retrieval_query_model: gemini-2.5-flash-lite
   embedding_model: gemini-embedding-001
   min_request_interval_seconds: 1.0
 
 openai:
-  api_key: your_openai_api_key_here
   chat_model: gpt-4o-mini
   embedding_model: text-embedding-3-small
+
+reranker:
+  provider: cohere
+  enabled: false
+  model: rerank-english-v3.0
+  candidates: 12
+  timeout_seconds: 8
+  warmup_request: true
+
+cohere:
+  api_key:
+  rerank_url: https://api.cohere.com/v1/rerank
 
 qdrant:
   collection: customer_care_kb

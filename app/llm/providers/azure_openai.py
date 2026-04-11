@@ -18,6 +18,10 @@ from app.llm.intent_prompts import (
     parse_intent_decision_payload,
 )
 from app.llm.prompts import DEFAULT_KB_SYSTEM_PROMPT, build_kb_user_prompt
+from app.llm.retrieval_query_prompts import (
+    DEFAULT_RETRIEVAL_QUERY_SYSTEM_PROMPT,
+    build_retrieval_query_prompt,
+)
 from app.services.action_models import AppointmentActionReplyContext, AppointmentExtraction
 from app.services.models import IntentDecision
 
@@ -31,6 +35,7 @@ class AzureOpenAIKbAnswerGenerator:
         api_version: str,
         system_prompt: str = DEFAULT_KB_SYSTEM_PROMPT,
         timeout_seconds: int = 60,
+        max_output_tokens: int = 220,
     ) -> None:
         self._api_key = _require_non_empty(api_key, "AZURE_OPENAI_API_KEY")
         self._endpoint = _normalize_endpoint(
@@ -46,6 +51,7 @@ class AzureOpenAIKbAnswerGenerator:
         )
         self._system_prompt = system_prompt
         self._timeout_seconds = timeout_seconds
+        self._max_output_tokens = max(1, int(max_output_tokens))
 
     @classmethod
     def from_env(cls) -> "AzureOpenAIKbAnswerGenerator":
@@ -58,6 +64,7 @@ class AzureOpenAIKbAnswerGenerator:
             ),
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
             system_prompt=os.getenv("KB_ANSWER_SYSTEM_PROMPT", DEFAULT_KB_SYSTEM_PROMPT),
+            max_output_tokens=int(os.getenv("KB_ANSWER_MAX_OUTPUT_TOKENS", "220")),
         )
 
     def generate_answer(
@@ -83,6 +90,7 @@ class AzureOpenAIKbAnswerGenerator:
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.2,
+                "max_tokens": self._max_output_tokens,
             },
             headers=_azure_headers(self._api_key),
             timeout_seconds=self._timeout_seconds,
@@ -337,6 +345,82 @@ class AzureOpenAIIntentDecisionGenerator:
             confidence=parsed["confidence"],
             frustration_flag=parsed["frustration_flag"],
             escalation_reason=parsed["escalation_reason"],
+        )
+
+
+class AzureOpenAIRetrievalQueryGenerator:
+    def __init__(
+        self,
+        api_key: str,
+        endpoint: str,
+        deployment: str,
+        api_version: str,
+        system_prompt: str = DEFAULT_RETRIEVAL_QUERY_SYSTEM_PROMPT,
+        timeout_seconds: int = 60,
+    ) -> None:
+        self._api_key = _require_non_empty(api_key, "AZURE_OPENAI_API_KEY")
+        self._endpoint = _normalize_endpoint(
+            _require_non_empty(endpoint, "AZURE_OPENAI_ENDPOINT")
+        )
+        self._deployment = _require_non_empty(
+            deployment,
+            "AZURE_OPENAI_CHAT_DEPLOYMENT",
+        )
+        self._api_version = _require_non_empty(
+            api_version,
+            "AZURE_OPENAI_API_VERSION",
+        )
+        self._system_prompt = system_prompt
+        self._timeout_seconds = timeout_seconds
+
+    @classmethod
+    def from_env(cls) -> "AzureOpenAIRetrievalQueryGenerator":
+        return cls(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY", ""),
+            endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
+            deployment=os.getenv(
+                "AZURE_OPENAI_RETRIEVAL_QUERY_DEPLOYMENT",
+                os.getenv(
+                    "AZURE_OPENAI_CHAT_DEPLOYMENT",
+                    os.getenv("AZURE_OPENAI_DEPLOYMENT", ""),
+                ),
+            ),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            system_prompt=os.getenv(
+                "RETRIEVAL_QUERY_SYSTEM_PROMPT",
+                DEFAULT_RETRIEVAL_QUERY_SYSTEM_PROMPT,
+            ),
+        )
+
+    def generate_query(
+        self,
+        user_query: str,
+        conversation_history: list[str],
+    ) -> str:
+        prompt = build_retrieval_query_prompt(
+            user_query=user_query,
+            conversation_history=conversation_history,
+        )
+        response_payload = post_json(
+            url=_build_chat_completions_url(
+                endpoint=self._endpoint,
+                deployment=self._deployment,
+                api_version=self._api_version,
+            ),
+            payload={
+                "messages": [
+                    {"role": "system", "content": self._system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0,
+            },
+            headers=_azure_headers(self._api_key),
+            timeout_seconds=self._timeout_seconds,
+            provider_name="Azure OpenAI retrieval query generation",
+        )
+        return _parse_chat_completion_text(
+            response_payload,
+            error_prefix="Azure OpenAI retrieval query generation",
         )
 
 

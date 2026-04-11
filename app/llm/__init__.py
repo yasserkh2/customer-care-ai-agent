@@ -26,7 +26,11 @@ from app.llm.providers import (
 from app.llm.prompts import (
     DEFAULT_KB_SYSTEM_PROMPT,
     build_kb_user_prompt,
-    is_conversational_query,
+)
+from app.llm.retrieval_query_factory import RetrievalQueryGeneratorFactory
+from app.llm.retrieval_query_prompts import (
+    DEFAULT_RETRIEVAL_QUERY_SYSTEM_PROMPT,
+    build_retrieval_query_prompt,
 )
 
 __all__ = [
@@ -43,11 +47,13 @@ __all__ = [
     "DEFAULT_ACTION_EXTRACTION_SYSTEM_PROMPT",
     "KbAnswerGeneratorFactory",
     "IntentDecisionGeneratorFactory",
+    "RetrievalQueryGeneratorFactory",
     "build_action_agent_user_prompt",
     "build_action_extraction_prompt",
     "DEFAULT_KB_SYSTEM_PROMPT",
     "DEFAULT_INTENT_CLASSIFIER_SYSTEM_PROMPT",
     "build_kb_user_prompt",
     "build_intent_classifier_prompt",
-    "is_conversational_query",
+    "DEFAULT_RETRIEVAL_QUERY_SYSTEM_PROMPT",
+    "build_retrieval_query_prompt",
 ]
