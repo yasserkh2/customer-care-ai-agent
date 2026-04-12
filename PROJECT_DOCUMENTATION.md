@@ -25,7 +25,6 @@ The architecture is intentionally layered:
 Provider note:
 
 - Supported/recommended runtime model providers: Gemini and Azure OpenAI.
-- OpenAI provider paths exist in code but are not implemented/validated for production end-to-end runtime use.
 
 ## 2. Runtime Architecture
 
@@ -250,7 +249,6 @@ Key files:
 - factories: `app/llm/factory.py`, `intent_factory.py`, `action_factory.py`, `escalation_factory.py`, `retrieval_query_factory.py`
 - prompts: `app/llm/prompts.py`, `intent_prompts.py`, `action_prompts.py`, `escalation_prompts.py`, `retrieval_query_prompts.py`
 - providers:
-  - `app/llm/providers/openai.py`
   - `app/llm/providers/gemini.py`
   - `app/llm/providers/azure_openai.py`
 
@@ -262,10 +260,6 @@ Provider coverage:
 - intent classification
 - retrieval query generation
 - appointment extraction (Gemini and Azure OpenAI for supported runtime setups)
-
-OpenAI status:
-
-- OpenAI provider modules are present, but OpenAI runtime provider flows are not implemented/validated for production use in this project.
 
 Common traits:
 
@@ -370,7 +364,6 @@ Strategies:
 
 Embedding providers:
 
-- OpenAI (`text-embedding-3-small` by default)
 - Gemini (`gemini-embedding-001` by default)
 - Local deterministic provider (for pipeline/testing workflows)
 
@@ -412,7 +405,6 @@ Important runtime behavior:
 ### 7.2 Provider Credentials / Models
 
 - Gemini: `GEMINI_API_KEY`, `GEMINI_CHAT_MODEL`, `GEMINI_EMBEDDING_MODEL`, `GEMINI_RETRIEVAL_QUERY_MODEL`
-- OpenAI: `OPENAI_API_KEY`, `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDING_MODEL` (code-level path present, not implemented/validated for production runtime providers)
 - Azure OpenAI: `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION`
 
 ### 7.3 Vector DB Keys

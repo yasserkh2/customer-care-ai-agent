@@ -15,7 +15,6 @@ The project is set up as a runnable foundation for a customer support chatbot. I
 - Mid-conversation human escalation routing with sticky handoff state
 - YAML-based runtime config through `config.yml` with `.env` overrides
 - Gemini and Azure OpenAI support for KB answers, action replies, action extraction, intent classification, and escalation replies
-- OpenAI provider path exists in code but is not implemented/validated for production end-to-end runtime use in this project
 - Human escalation response path with LLM-first generation and safe template fallback
 - Shared chat state and conversation history handling
 - Session memory in the CLI chat loop
@@ -112,7 +111,6 @@ app/
       __init__.py
       azure_openai.py
       gemini.py
-      openai.py
   services/
     __init__.py
     action_models.py
@@ -149,7 +147,6 @@ processing/
       factory.py
       gemini.py
       local.py
-      openai.py
     models.py
 vector_db/
   __init__.py
@@ -337,7 +334,6 @@ The embedding layer now supports provider-based implementations through `process
 Current providers:
 
 - `gemini` for Google AI Studio embeddings
-- `openai` for OpenAI embeddings
 - `local` for deterministic pipeline-only testing
 
 Current project default for retrieval is Gemini embeddings (configured in `config.yml`: `embedding_provider=gemini` with `gemini.embedding_model=gemini-embedding-001`).
@@ -351,7 +347,6 @@ The appointment flow is now implemented as a real stateful action agent.
 Current behavior:
 
 - extracts booking fields with Gemini or Azure OpenAI for supported runtime setups
-- OpenAI extraction path exists in code but is not implemented/validated for production runtime
 - stores slots in `ChatState`
 - proactively fetches available dates when the service is known and the date is still missing
 - asks for one missing field at a time across turns
@@ -430,7 +425,6 @@ Set secrets in `.env`:
 
 ```bash
 GEMINI_API_KEY=your_gemini_api_key_here
-OPENAI_API_KEY=your_openai_api_key_here
 AZURE_OPENAI_API_KEY=your_azure_openai_api_key_here
 COHERE_API_KEY=your_cohere_api_key_here
 # Optional for hosted Qdrant:
@@ -463,7 +457,6 @@ Preferred production-style setup:
 - Gemini embeddings for ingestion + retrieval
 - Azure OpenAI for KB answers, action replies/extraction, intent classification, and escalation replies
 - Gemini and Azure OpenAI are the recommended model providers for this project
-- OpenAI provider path is currently not implemented/validated end-to-end for production runtime
 
 Alternative fully-Gemini setup in `config.yml` (supported across the project):
 
@@ -575,7 +568,6 @@ Recommended secrets in `.env`:
 
 ```bash
 GEMINI_API_KEY=your_gemini_api_key_here
-OPENAI_API_KEY=your_openai_api_key_here
 AZURE_OPENAI_API_KEY=your_azure_openai_api_key_here
 COHERE_API_KEY=your_cohere_api_key_here
 # Optional for hosted Qdrant:
@@ -745,12 +737,6 @@ Run a small Gemini experiment with only 20 FAQ records:
 EMBEDDING_PROVIDER=gemini FAQ_PIPELINE_LIMIT=20 QDRANT_PATH=vector_db/qdrant/data/experiment_gemini_20 .venv/bin/python scripts/run_faq_processing_pipeline.py
 ```
 
-Legacy/experimental OpenAI embedding experiment (not part of the supported runtime provider setup):
-
-```bash
-EMBEDDING_PROVIDER=openai FAQ_PIPELINE_LIMIT=20 QDRANT_PATH=vector_db/qdrant/data/experiment_openai_20 .venv/bin/python scripts/run_faq_processing_pipeline.py
-```
-
 Run a small local-provider experiment for pipeline-only testing:
 
 ```bash
@@ -798,9 +784,6 @@ Key environment variables:
 - `GEMINI_EMBEDDING_MODEL`
 - `GEMINI_CHAT_MODEL`
 - `GEMINI_MIN_REQUEST_INTERVAL_SECONDS`
-- `OPENAI_API_KEY`
-- `OPENAI_EMBEDDING_MODEL`
-- `OPENAI_CHAT_MODEL`
 - `AZURE_OPENAI_API_KEY`
 - `AZURE_OPENAI_ENDPOINT`
 - `AZURE_OPENAI_CHAT_DEPLOYMENT`
