@@ -22,6 +22,11 @@ The architecture is intentionally layered:
 - ingestion/chunking/vectorization in `processing`
 - vector database abstractions + Qdrant implementation in `vector_db`
 
+Provider note:
+
+- Supported/recommended runtime model providers: Gemini and Azure OpenAI.
+- OpenAI provider paths exist in code but are not implemented/validated for production end-to-end runtime use.
+
 ## 2. Runtime Architecture
 
 ### 2.1 Graph Flow
@@ -256,7 +261,11 @@ Provider coverage:
 - escalation reply generation
 - intent classification
 - retrieval query generation
-- appointment extraction (OpenAI/Gemini in `action_extraction.py`, Azure in provider file)
+- appointment extraction (Gemini and Azure OpenAI for supported runtime setups)
+
+OpenAI status:
+
+- OpenAI provider modules are present, but OpenAI runtime provider flows are not implemented/validated for production use in this project.
 
 Common traits:
 
@@ -403,7 +412,7 @@ Important runtime behavior:
 ### 7.2 Provider Credentials / Models
 
 - Gemini: `GEMINI_API_KEY`, `GEMINI_CHAT_MODEL`, `GEMINI_EMBEDDING_MODEL`, `GEMINI_RETRIEVAL_QUERY_MODEL`
-- OpenAI: `OPENAI_API_KEY`, `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDING_MODEL`
+- OpenAI: `OPENAI_API_KEY`, `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDING_MODEL` (code-level path present, not implemented/validated for production runtime providers)
 - Azure OpenAI: `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_CHAT_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION`
 
 ### 7.3 Vector DB Keys
