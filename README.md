@@ -165,7 +165,25 @@ scripts/
   setup_qdrant.py
   export_graph_png.py
 data/
+  documents/
+    documents_manifest.json
+    doc_0001_company_overview.md
+    doc_0002_authorizations.md
+    doc_0003_benefits_verification.md
+    doc_0004_medical_billing_denial_management.md
+    doc_0005_medical_auditing.md
+    doc_0006_financial_management.md
+    doc_0007_digital_marketing_website_services.md
+    doc_0008_customer_care.md
+    doc_0009_elevate_communication_services.md
+    doc_0010_credentialing_provider_maintenance.md
+    doc_0011_contact_information.md
+  faqs/
+    high_quality_faqs.jsonl
   booking_store.json
+  escalation_store.json
+  Data Migration.md
+  VECTOR_DB_REFRESH_PROCESS.md
 README.md
 DEVELOPMENT_DECISIONS.md
 INTERFACE_DECISIONS.md
@@ -385,11 +403,22 @@ Default local seeded calendar window:
 - duration: `31` days
 - slot frequency: every `30` minutes from `09:00 AM` to `05:00 PM`
 
-### Current FAQ dataset
+### Current local data used (`data/`)
 
-For current KB testing, the repo now includes a curated higher-quality FAQ set:
+The default local runtime and indexing flow uses the files under `data/`.
 
-- `cob_mock_kb_large/high_quality_faqs/high_quality_faqs.jsonl`
+Current sources and stores:
+
+- Retrieval FAQs: `data/faqs/high_quality_faqs.jsonl` (currently `10` curated FAQ entries)
+- Retrieval documents manifest: `data/documents/documents_manifest.json` (currently `11` markdown documents under `data/documents/`)
+- Appointment action store: `data/booking_store.json` (calendar `slots` plus persisted `bookings`)
+- Human escalation store: `data/escalation_store.json` (persisted escalation tickets from handoff flows)
+- Data/process notes: `data/Data Migration.md` and `data/VECTOR_DB_REFRESH_PROCESS.md`
+
+Notes:
+
+- `faqs_jsonl_path` and `documents_manifest_path` in `config.yml` should point to these `data/` paths for the standard local setup.
+- If you previously used `cob_mock_kb_large/...`, treat it as legacy or interview/demo data unless you intentionally override the paths.
 
 ## Full run instructions (start here)
 
